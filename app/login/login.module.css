@@ -1,0 +1,110 @@
+/* ログイン画面のスタイル */
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  padding: var(--space-md);
+}
+
+.loginBox {
+  width: 100%;
+  max-width: 440px;
+  background: var(--color-bg-card);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.header {
+  text-align: center;
+  padding: var(--space-xl) var(--space-lg) var(--space-md);
+}
+
+.logo {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  letter-spacing: 0.1em;
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  margin-top: var(--space-xs);
+}
+
+.form {
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+.error {
+  color: var(--color-danger);
+  font-size: 0.8rem;
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm);
+  background: var(--color-danger-light);
+  border-radius: var(--border-radius-sm);
+}
+
+/* テスト用アカウント一覧 */
+.testAccounts {
+  background: var(--color-bg);
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.testAccountsTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.accountList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.accountItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: all var(--transition-fast);
+}
+
+.accountItem:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.accountName {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--color-text);
+  min-width: 70px;
+}
+
+.accountRole {
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  background: var(--color-border);
+  border-radius: 9999px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.accountEmail {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  margin-left: auto;
+}

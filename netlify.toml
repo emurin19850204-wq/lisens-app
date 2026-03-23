@@ -1,0 +1,16 @@
+# LISENS - Netlify設定（静的エクスポート用）
+[build]
+  command = "npm run build"
+  publish = "out"
+
+# SPAライクなルーティング対応
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# 静的アセットのキャッシュ設定
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
