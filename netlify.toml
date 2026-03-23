@@ -1,13 +1,13 @@
 # LISENS - Netlify設定（静的エクスポート用）
+# Next.jsプラグインを使わず、純粋な静的サイトとしてデプロイする
+
 [build]
   command = "npm run build"
   publish = "out"
 
-# SPAライクなルーティング対応
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+# Next.jsプラグインを無効化（静的エクスポートでは不要）
+[build.environment]
+  NETLIFY_NEXT_PLUGIN_SKIP = "true"
 
 # 静的アセットのキャッシュ設定
 [[headers]]
