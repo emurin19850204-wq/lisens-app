@@ -1,12 +1,14 @@
 /**
  * LISENS - 研修者詳細画面（個人カルテ）- クライアントコンポーネント
+ * 
+ * 受講進捗の編集・引継ぎメモ機能を含む。
  */
 'use client';
 
-import { useState, use } from 'react';
+import { useState, useCallback, use } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { getLearnerDetail } from '@/lib/data';
+import { getLearnerDetail, updateProgressStatus, updateProgressMemo, updateProgressDates, updateSubjectHours } from '@/lib/data';
 import {
   ROLE_LABELS,
   LEVEL_LABELS,
@@ -28,9 +30,12 @@ import {
   OSCE_PASS_SCORE,
   EVALUATION_TEMPLATES,
 } from '@/lib/constants';
-import type { EvaluationSectionCode } from '@/lib/types';
+import type { EvaluationSectionCode, ProgressStatus } from '@/lib/types';
 
 type TabKey = 'progress' | 'evaluations' | 'certifications';
+
+/** 進捗編集が可能なロール */
+const CAN_EDIT_PROGRESS_ROLES = ['admin', 'education_manager', 'evaluator', 'store_manager'];
 
 export default function LearnerDetailClient({
   params,
@@ -40,6 +45,14 @@ export default function LearnerDetailClient({
   const { id } = use(params);
   const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<TabKey>('progress');
+  // 進捗編集モード
+  const [isEditingProgress, setIsEditingProgress] = useState(false);
+  // メモ展開中の科目ID
+  const [expandedSubjects, setExpandedSubjects] = useState<Set<string>>(new Set());
+  // メモ編集中の内容 { subjectId: memoText }
+  const [editingMemos, setEditingMemos] = useState<Record<string, string>>({});
+  // 表示更新用のカウンター
+  const [refreshKey, setRefreshKey] = useState(0);
 
   if (!currentUser) return null;
 
@@ -77,6 +90,75 @@ export default function LearnerDetailClient({
   const { user: learner, organization, currentLevel, curriculumProgresses, evaluations, certifications } = detail;
   const canEvaluate = CAN_EVALUATE_ROLES.includes(currentUser.role);
   const canApplyCert = CAN_APPLY_CERTIFICATION_ROLES.includes(currentUser.role);
+  const canEditProgress = CAN_EDIT_PROGRESS_ROLES.includes(currentUser.role);
+
+  // メモの展開/折りたたみ
+  const toggleSubjectExpand = (subjectId: string) => {
+    setExpandedSubjects(prev => {
+      const next = new Set(prev);
+      if (next.has(subjectId)) {
+        next.delete(subjectId);
+      } else {
+        next.add(subjectId);
+      }
+      return next;
+    });
+  };
+
+  // ステータス変更
+  const handleStatusChange = (subjectId: string, newStatus: ProgressStatus) => {
+    updateProgressStatus(learner.id, subjectId, newStatus);
+    setRefreshKey(k => k + 1);
+  };
+
+  // 日付変更（開始日・完了日）
+  const handleDateChange = (subjectId: string, field: 'startedAt' | 'completedAt', value: string) => {
+    const detail2 = getLearnerDetail(id);
+    if (!detail2) return;
+    const allCp = detail2.curriculumProgresses;
+    let sp: typeof allCp[0]['subjects'][0] | undefined;
+    for (const cp2 of allCp) {
+      sp = cp2.subjects.find(s => s.subject.id === subjectId);
+      if (sp) break;
+    }
+    const currentStarted = sp?.progress?.startedAt || null;
+    const currentCompleted = sp?.progress?.completedAt || null;
+    const newDate = value ? new Date(value + 'T00:00:00Z').toISOString() : null;
+    if (field === 'startedAt') {
+      updateProgressDates(learner.id, subjectId, newDate, currentCompleted);
+    } else {
+      updateProgressDates(learner.id, subjectId, currentStarted, newDate);
+    }
+    setRefreshKey(k => k + 1);
+  };
+
+  // 科目時間変更
+  const handleHoursChange = (subjectId: string, hours: number) => {
+    if (hours > 0) {
+      updateSubjectHours(subjectId, hours);
+      setRefreshKey(k => k + 1);
+    }
+  };
+
+  // メモ保存
+  const handleMemoSave = (subjectId: string) => {
+    const memo = editingMemos[subjectId] ?? '';
+    updateProgressMemo(learner.id, subjectId, memo);
+    setEditingMemos(prev => {
+      const next = { ...prev };
+      delete next[subjectId];
+      return next;
+    });
+    setRefreshKey(k => k + 1);
+  };
+
+  // メモ編集開始
+  const startEditMemo = (subjectId: string, currentMemo: string | null) => {
+    setEditingMemos(prev => ({ ...prev, [subjectId]: currentMemo || '' }));
+  };
+
+  // メモ編集中かどうか
+  const isEditingMemo = (subjectId: string) => subjectId in editingMemos;
 
   return (
     <div className="page-container">
@@ -149,7 +231,19 @@ export default function LearnerDetailClient({
 
       {/* 進捗タブ */}
       {activeTab === 'progress' && (
-        <div>
+        <div key={refreshKey}>
+          {/* 編集モード切替ボタン */}
+          {canEditProgress && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-md)', gap: 'var(--space-sm)' }}>
+              <button
+                className={`btn ${isEditingProgress ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setIsEditingProgress(!isEditingProgress)}
+              >
+                {isEditingProgress ? '✅ 編集を終了' : '✏️ 進捗を編集'}
+              </button>
+            </div>
+          )}
+
           {curriculumProgresses.map(cp => (
             <div key={cp.curriculum.id} className="card" style={{ marginBottom: 'var(--space-md)' }}>
               <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -167,31 +261,183 @@ export default function LearnerDetailClient({
               <div className="card-body" style={{ padding: 0 }}>
                 <table>
                   <thead>
-                    <tr><th>コマ</th><th>時間</th><th>ステータス</th><th>開始日</th><th>完了日</th></tr>
+                    <tr>
+                      <th>コマ</th>
+                      <th>時間</th>
+                      <th>ステータス</th>
+                      <th>開始日</th>
+                      <th>完了日</th>
+                      <th style={{ width: '40px', textAlign: 'center' }}>📝</th>
+                    </tr>
                   </thead>
                   <tbody>
-                    {cp.subjects.map(sp => (
-                      <tr key={sp.subject.id}>
-                        <td>
-                          <span style={{ marginRight: 'var(--space-sm)' }}>
-                            {sp.progress?.status === 'completed' ? '☑' : '☐'}
-                          </span>
-                          {sp.subject.name}
-                        </td>
-                        <td className="text-sm text-secondary">{sp.subject.hours}h</td>
-                        <td>
-                          <span className={`badge ${PROGRESS_STATUS_BADGE_CLASS[sp.progress?.status || 'not_started']}`}>
-                            {PROGRESS_STATUS_LABELS[sp.progress?.status || 'not_started']}
-                          </span>
-                        </td>
-                        <td className="text-sm text-secondary">
-                          {sp.progress?.startedAt ? new Date(sp.progress.startedAt).toLocaleDateString('ja-JP') : '—'}
-                        </td>
-                        <td className="text-sm text-secondary">
-                          {sp.progress?.completedAt ? new Date(sp.progress.completedAt).toLocaleDateString('ja-JP') : '—'}
-                        </td>
-                      </tr>
-                    ))}
+                    {cp.subjects.map(sp => {
+                      const subjectId = sp.subject.id;
+                      const isExpanded = expandedSubjects.has(subjectId);
+                      const currentMemo = sp.progress?.memo || null;
+                      const hasMemo = !!currentMemo;
+
+                      return (
+                        <>
+                          <tr key={subjectId} style={{ cursor: 'pointer' }} onClick={() => toggleSubjectExpand(subjectId)}>
+                            <td>
+                              <span style={{ marginRight: 'var(--space-sm)' }}>
+                                {sp.progress?.status === 'completed' ? '☑' : '☐'}
+                              </span>
+                              {sp.subject.name}
+                            </td>
+                            <td className="text-sm text-secondary">
+                              {isEditingProgress && canEditProgress ? (
+                                <input
+                                  type="number"
+                                  className="form-input"
+                                  style={{ padding: '2px 6px', fontSize: '0.8rem', width: '60px', textAlign: 'center' }}
+                                  value={sp.subject.hours}
+                                  min={0.5}
+                                  step={0.5}
+                                  onClick={e => e.stopPropagation()}
+                                  onChange={e => handleHoursChange(subjectId, parseFloat(e.target.value))}
+                                />
+                              ) : (
+                                <>{sp.subject.hours}h</>
+                              )}
+                            </td>
+                            <td>
+                              {isEditingProgress && canEditProgress ? (
+                                <select
+                                  className="form-input"
+                                  style={{ padding: '2px 6px', fontSize: '0.8rem', width: 'auto', minWidth: '80px' }}
+                                  value={sp.progress?.status || 'not_started'}
+                                  onClick={e => e.stopPropagation()}
+                                  onChange={e => handleStatusChange(subjectId, e.target.value as ProgressStatus)}
+                                >
+                                  <option value="not_started">未着手</option>
+                                  <option value="in_progress">受講中</option>
+                                  <option value="completed">完了</option>
+                                </select>
+                              ) : (
+                                <span className={`badge ${PROGRESS_STATUS_BADGE_CLASS[sp.progress?.status || 'not_started']}`}>
+                                  {PROGRESS_STATUS_LABELS[sp.progress?.status || 'not_started']}
+                                </span>
+                              )}
+                            </td>
+                            <td className="text-sm text-secondary">
+                              {isEditingProgress && canEditProgress ? (
+                                <input
+                                  type="date"
+                                  className="form-input"
+                                  style={{ padding: '2px 4px', fontSize: '0.75rem', width: 'auto', minWidth: '120px' }}
+                                  value={sp.progress?.startedAt ? sp.progress.startedAt.slice(0, 10) : ''}
+                                  onClick={e => e.stopPropagation()}
+                                  onChange={e => handleDateChange(subjectId, 'startedAt', e.target.value)}
+                                />
+                              ) : (
+                                <>{sp.progress?.startedAt ? new Date(sp.progress.startedAt).toLocaleDateString('ja-JP') : '—'}</>
+                              )}
+                            </td>
+                            <td className="text-sm text-secondary">
+                              {isEditingProgress && canEditProgress ? (
+                                <input
+                                  type="date"
+                                  className="form-input"
+                                  style={{ padding: '2px 4px', fontSize: '0.75rem', width: 'auto', minWidth: '120px' }}
+                                  value={sp.progress?.completedAt ? sp.progress.completedAt.slice(0, 10) : ''}
+                                  onClick={e => e.stopPropagation()}
+                                  onChange={e => handleDateChange(subjectId, 'completedAt', e.target.value)}
+                                />
+                              ) : (
+                                <>{sp.progress?.completedAt ? new Date(sp.progress.completedAt).toLocaleDateString('ja-JP') : '—'}</>
+                              )}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span style={{ opacity: hasMemo ? 1 : 0.3, fontSize: '0.9rem' }}>
+                                {hasMemo ? '📝' : '○'}
+                              </span>
+                              <span style={{ fontSize: '0.7rem', marginLeft: '2px' }}>
+                                {isExpanded ? '▲' : '▼'}
+                              </span>
+                            </td>
+                          </tr>
+                          {/* メモ展開エリア */}
+                          {isExpanded && (
+                            <tr key={`${subjectId}-memo`}>
+                              <td colSpan={6} style={{ padding: 0, border: 'none' }}>
+                                <div style={{
+                                  padding: 'var(--space-sm) var(--space-md)',
+                                  background: 'var(--color-bg)',
+                                  borderTop: '1px dashed var(--color-border)',
+                                  borderBottom: '1px dashed var(--color-border)',
+                                }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-xs)' }}>
+                                    <span className="text-sm font-semibold" style={{ color: 'var(--color-primary)' }}>📋 引継ぎメモ</span>
+                                    {sp.subject.description && (
+                                      <span className="text-sm text-secondary">| 科目概要: {sp.subject.description}</span>
+                                    )}
+                                  </div>
+
+                                  {canEditProgress && isEditingMemo(subjectId) ? (
+                                    /* メモ編集モード */
+                                    <div>
+                                      <textarea
+                                        className="form-input"
+                                        style={{ width: '100%', minHeight: '80px', fontSize: '0.85rem', resize: 'vertical' }}
+                                        value={editingMemos[subjectId] || ''}
+                                        onChange={e => setEditingMemos(prev => ({ ...prev, [subjectId]: e.target.value }))}
+                                        placeholder="引継ぎ事項、指導上の注意点、受講者の特記事項などを記入..."
+                                      />
+                                      <div style={{ display: 'flex', gap: 'var(--space-sm)', marginTop: 'var(--space-xs)', justifyContent: 'flex-end' }}>
+                                        <button
+                                          className="btn btn-outline btn-sm"
+                                          onClick={() => setEditingMemos(prev => { const n = { ...prev }; delete n[subjectId]; return n; })}
+                                        >
+                                          キャンセル
+                                        </button>
+                                        <button
+                                          className="btn btn-primary btn-sm"
+                                          onClick={() => handleMemoSave(subjectId)}
+                                        >
+                                          💾 保存
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    /* メモ閲覧モード */
+                                    <div>
+                                      {currentMemo ? (
+                                        <div style={{
+                                          padding: 'var(--space-sm)',
+                                          background: 'var(--color-surface)',
+                                          borderRadius: 'var(--border-radius-sm)',
+                                          borderLeft: '3px solid var(--color-primary)',
+                                          fontSize: '0.85rem',
+                                          lineHeight: '1.6',
+                                          whiteSpace: 'pre-wrap',
+                                        }}>
+                                          {currentMemo}
+                                        </div>
+                                      ) : (
+                                        <div className="text-sm text-secondary" style={{ fontStyle: 'italic', padding: 'var(--space-xs) 0' }}>
+                                          メモはありません
+                                        </div>
+                                      )}
+                                      {canEditProgress && (
+                                        <button
+                                          className="btn btn-outline btn-sm"
+                                          style={{ marginTop: 'var(--space-xs)' }}
+                                          onClick={() => startEditMemo(subjectId, currentMemo)}
+                                        >
+                                          ✏️ {currentMemo ? 'メモを編集' : 'メモを追加'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

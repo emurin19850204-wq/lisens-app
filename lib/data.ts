@@ -265,6 +265,127 @@ export function addEvaluation(
 export function getAllSubjects() { return subjects; }
 
 // ============================================
+// 受講進捗の更新操作（MVPインメモリ）
+// ============================================
+
+import type { ProgressStatus, CourseProgress } from './types';
+
+/** 受講進捗のステータスを更新（存在しなければ新規作成） */
+export function updateProgressStatus(
+  userId: string,
+  subjectId: string,
+  status: ProgressStatus,
+): CourseProgress {
+  const now = new Date().toISOString();
+  let progress = courseProgresses.find(p => p.userId === userId && p.subjectId === subjectId);
+
+  if (progress) {
+    progress.status = status;
+    if (status === 'in_progress' && !progress.startedAt) {
+      progress.startedAt = now;
+    }
+    if (status === 'completed') {
+      progress.completedAt = now;
+      if (!progress.startedAt) progress.startedAt = now;
+    }
+    if (status === 'not_started') {
+      progress.startedAt = null;
+      progress.completedAt = null;
+    }
+    progress.updatedAt = now;
+    return progress;
+  }
+
+  // 新規作成
+  const newProgress: CourseProgress = {
+    id: `prog-${Date.now()}`,
+    userId,
+    subjectId,
+    status,
+    startedAt: status !== 'not_started' ? now : null,
+    completedAt: status === 'completed' ? now : null,
+    memo: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  courseProgresses.push(newProgress);
+  return newProgress;
+}
+
+/** 受講進捗のメモを更新（存在しなければ新規作成） */
+export function updateProgressMemo(
+  userId: string,
+  subjectId: string,
+  memo: string,
+): CourseProgress {
+  const now = new Date().toISOString();
+  let progress = courseProgresses.find(p => p.userId === userId && p.subjectId === subjectId);
+
+  if (progress) {
+    progress.memo = memo || null;
+    progress.updatedAt = now;
+    return progress;
+  }
+
+  // 未着手でメモだけ追加
+  const newProgress: CourseProgress = {
+    id: `prog-${Date.now()}`,
+    userId,
+    subjectId,
+    status: 'not_started',
+    startedAt: null,
+    completedAt: null,
+    memo: memo || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  courseProgresses.push(newProgress);
+  return newProgress;
+}
+
+/** 受講進捗の日付を更新（存在しなければ新規作成） */
+export function updateProgressDates(
+  userId: string,
+  subjectId: string,
+  startedAt: string | null,
+  completedAt: string | null,
+): CourseProgress {
+  const now = new Date().toISOString();
+  let progress = courseProgresses.find(p => p.userId === userId && p.subjectId === subjectId);
+
+  if (progress) {
+    progress.startedAt = startedAt;
+    progress.completedAt = completedAt;
+    progress.updatedAt = now;
+    return progress;
+  }
+
+  // 新規作成
+  const newProgress: CourseProgress = {
+    id: `prog-${Date.now()}`,
+    userId,
+    subjectId,
+    status: completedAt ? 'completed' : startedAt ? 'in_progress' : 'not_started',
+    startedAt,
+    completedAt,
+    memo: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  courseProgresses.push(newProgress);
+  return newProgress;
+}
+
+/** 科目の時間を更新 */
+export function updateSubjectHours(subjectId: string, hours: number): boolean {
+  const sub = subjects.find(s => s.id === subjectId);
+  if (!sub) return false;
+  sub.hours = hours;
+  sub.updatedAt = new Date().toISOString();
+  return true;
+}
+
+// ============================================
 // 認定の変更操作
 // ============================================
 

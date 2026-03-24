@@ -99,6 +99,8 @@ export interface CourseProgress {
   status: ProgressStatus;
   startedAt: string | null;
   completedAt: string | null;
+  /** 引継ぎメモ（担当者間の申し送り事項） */
+  memo: string | null;
   createdAt: string;
   updatedAt: string;
 }
