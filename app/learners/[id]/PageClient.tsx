@@ -91,6 +91,7 @@ export default function LearnerDetailClient({
   const canEvaluate = CAN_EVALUATE_ROLES.includes(currentUser.role);
   const canApplyCert = CAN_APPLY_CERTIFICATION_ROLES.includes(currentUser.role);
   const canEditProgress = CAN_EDIT_PROGRESS_ROLES.includes(currentUser.role);
+  const isLearner = currentUser.role === 'learner';
 
   // メモの展開/折りたたみ
   const toggleSubjectExpand = (subjectId: string) => {
@@ -351,7 +352,7 @@ export default function LearnerDetailClient({
                             </td>
                             <td style={{ textAlign: 'center' }}>
                               <span style={{ opacity: hasMemo ? 1 : 0.3, fontSize: '0.9rem' }}>
-                                {hasMemo ? '📝' : '○'}
+                                {hasMemo ? (isLearner ? '💬' : '📝') : '○'}
                               </span>
                               <span style={{ fontSize: '0.7rem', marginLeft: '2px' }}>
                                 {isExpanded ? '▲' : '▼'}
@@ -369,7 +370,9 @@ export default function LearnerDetailClient({
                                   borderBottom: '1px dashed var(--color-border)',
                                 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-xs)' }}>
-                                    <span className="text-sm font-semibold" style={{ color: 'var(--color-primary)' }}>📋 引継ぎメモ</span>
+                                    <span className="text-sm font-semibold" style={{ color: 'var(--color-primary)' }}>
+                                      {isLearner ? '💬 講師からのコメント' : '📋 引継ぎメモ'}
+                                    </span>
                                     {sp.subject.description && (
                                       <span className="text-sm text-secondary">| 科目概要: {sp.subject.description}</span>
                                     )}
@@ -417,7 +420,7 @@ export default function LearnerDetailClient({
                                         </div>
                                       ) : (
                                         <div className="text-sm text-secondary" style={{ fontStyle: 'italic', padding: 'var(--space-xs) 0' }}>
-                                          メモはありません
+                                          {isLearner ? 'まだ講師からのコメントはありません' : 'メモはありません'}
                                         </div>
                                       )}
                                       {canEditProgress && (
