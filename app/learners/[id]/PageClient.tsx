@@ -351,9 +351,11 @@ export default function LearnerDetailClient({
                               )}
                             </td>
                             <td style={{ textAlign: 'center' }}>
-                              <span style={{ opacity: hasMemo ? 1 : 0.3, fontSize: '0.9rem' }}>
-                                {hasMemo ? (isLearner ? '💬' : '📝') : '○'}
-                              </span>
+                              {hasMemo && (
+                                <span style={{ fontSize: '0.9rem' }}>
+                                  {isLearner ? '💬' : '📝'}
+                                </span>
+                              )}
                               <span style={{ fontSize: '0.7rem', marginLeft: '2px' }}>
                                 {isExpanded ? '▲' : '▼'}
                               </span>
