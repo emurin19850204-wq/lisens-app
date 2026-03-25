@@ -59,7 +59,10 @@ export default function LearnersPage() {
           <span className="text-secondary text-sm">{summaries.length}名</span>
         </div>
         {canManage && (
-          <Link href="/learners/new" className="btn btn-primary">➕ 新規登録</Link>
+          <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+            <Link href="/learners/invite" className="btn btn-outline">✉️ メール招待</Link>
+            <Link href="/learners/new" className="btn btn-primary">➕ 新規登録</Link>
+          </div>
         )}
       </div>
 

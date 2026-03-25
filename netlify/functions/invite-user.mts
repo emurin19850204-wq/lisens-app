@@ -82,7 +82,7 @@ export default async (req: Request) => {
 
     // リクエストボディの解析
     const body = await req.json();
-    const { email, name, role, organizationId, hireDate } = body;
+    const { email, name, role, organizationId, hireDate, tracks } = body;
 
     // バリデーション
     if (!email || !name || !role || !organizationId) {
@@ -143,7 +143,7 @@ export default async (req: Request) => {
       role,
       organization_id: organizationId,
       current_level: role === 'learner' ? 'lv1' : 'lv5',
-      tracks: '{}',
+      tracks: Array.isArray(tracks) ? tracks : [],
       hire_date: hireDate || null,
       auth_uid: inviteData.user?.id || null,
     });
