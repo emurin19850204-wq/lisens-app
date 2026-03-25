@@ -5,7 +5,10 @@
  * 全関数が非同期（async）に変更されている。
  */
 
-import { supabase } from './supabase';
+import { getSupabase } from './supabase';
+
+// 各関数内でgetSupabase()を呼び出すショートカット
+const sb = () => getSupabase();
 import type {
   User, UserRole, Organization, LearnerSummary, LearnerDetail,
   CurriculumProgress, SubjectProgress, EvaluationWithDetails,
@@ -137,27 +140,27 @@ function mapCertificationLevel(row: any): CertificationLevel {
 // ============================================
 
 export async function getUserById(id: string): Promise<User | undefined> {
-  const { data } = await supabase.from('users').select('*').eq('id', id).single();
+  const { data } = await sb().from('users').select('*').eq('id', id).single();
   return data ? mapUser(data) : undefined;
 }
 
 export async function getUserByEmail(email: string): Promise<User | undefined> {
-  const { data } = await supabase.from('users').select('*').eq('email', email).single();
+  const { data } = await sb().from('users').select('*').eq('email', email).single();
   return data ? mapUser(data) : undefined;
 }
 
 export async function getUserByAuthUid(authUid: string): Promise<User | undefined> {
-  const { data } = await supabase.from('users').select('*').eq('auth_uid', authUid).single();
+  const { data } = await sb().from('users').select('*').eq('auth_uid', authUid).single();
   return data ? mapUser(data) : undefined;
 }
 
 export async function getOrganizationById(id: string): Promise<Organization | undefined> {
-  const { data } = await supabase.from('organizations').select('*').eq('id', id).single();
+  const { data } = await sb().from('organizations').select('*').eq('id', id).single();
   return data ? mapOrganization(data) : undefined;
 }
 
 export async function getLearners(): Promise<User[]> {
-  const { data } = await supabase.from('users').select('*').eq('role', 'learner');
+  const { data } = await sb().from('users').select('*').eq('role', 'learner');
   return (data || []).map(mapUser);
 }
 
@@ -187,13 +190,13 @@ export async function getLearnerSummary(userId: string): Promise<LearnerSummary 
   const org = await getOrganizationById(user.organizationId);
   if (!org) return undefined;
 
-  const { data: progresses } = await supabase
+  const { data: progresses } = await sb()
     .from('course_progresses').select('*').eq('user_id', userId);
   const total = progresses?.length || 0;
   const completed = progresses?.filter(p => p.status === 'completed').length || 0;
   const overallProgress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-  const { data: evals } = await supabase
+  const { data: evals } = await sb()
     .from('evaluations').select('evaluated_at').eq('learner_id', userId)
     .order('evaluated_at', { ascending: false }).limit(1);
   const lastEval = evals?.[0];
@@ -221,7 +224,7 @@ export async function getLearnerDetail(userId: string): Promise<LearnerDetail | 
   const org = await getOrganizationById(user.organizationId);
   if (!org) return undefined;
 
-  const { data: levelData } = await supabase
+  const { data: levelData } = await sb()
     .from('certification_levels').select('*').eq('code', user.currentLevel).single();
   if (!levelData) return undefined;
   const currentLevel = mapCertificationLevel(levelData);
@@ -236,9 +239,9 @@ export async function getLearnerDetail(userId: string): Promise<LearnerDetail | 
 }
 
 async function getCurriculumProgresses(userId: string): Promise<CurriculumProgress[]> {
-  const { data: curricula } = await supabase.from('curricula').select('*').order('sort_order');
-  const { data: allSubjects } = await supabase.from('subjects').select('*').order('sort_order');
-  const { data: allProgresses } = await supabase
+  const { data: curricula } = await sb().from('curricula').select('*').order('sort_order');
+  const { data: allSubjects } = await sb().from('subjects').select('*').order('sort_order');
+  const { data: allProgresses } = await sb()
     .from('course_progresses').select('*').eq('user_id', userId);
 
   return (curricula || []).map(cur => {
@@ -259,7 +262,7 @@ async function getCurriculumProgresses(userId: string): Promise<CurriculumProgre
 // ============================================
 
 export async function getEvaluationsWithDetails(userId: string): Promise<EvaluationWithDetails[]> {
-  const { data: evals } = await supabase
+  const { data: evals } = await sb()
     .from('evaluations').select('*').eq('learner_id', userId)
     .order('evaluated_at', { ascending: false });
 
@@ -269,7 +272,7 @@ export async function getEvaluationsWithDetails(userId: string): Promise<Evaluat
   for (const evalRow of evals) {
     const evaluator = await getUserById(evalRow.evaluator_id);
     if (!evaluator) continue;
-    const { data: itemRows } = await supabase
+    const { data: itemRows } = await sb()
       .from('evaluation_items').select('*').eq('evaluation_id', evalRow.id);
     const items = (itemRows || []).map(mapEvaluationItem);
     const totalScore = items.reduce((sum, item) => sum + item.score, 0);
@@ -280,7 +283,7 @@ export async function getEvaluationsWithDetails(userId: string): Promise<Evaluat
 }
 
 export async function getAllEvaluations(): Promise<EvaluationWithDetails[]> {
-  const { data: evals } = await supabase
+  const { data: evals } = await sb()
     .from('evaluations').select('*').order('evaluated_at', { ascending: false });
 
   if (!evals || evals.length === 0) return [];
@@ -289,7 +292,7 @@ export async function getAllEvaluations(): Promise<EvaluationWithDetails[]> {
   for (const evalRow of evals) {
     const evaluator = await getUserById(evalRow.evaluator_id);
     if (!evaluator) continue;
-    const { data: itemRows } = await supabase
+    const { data: itemRows } = await sb()
       .from('evaluation_items').select('*').eq('evaluation_id', evalRow.id);
     const items = (itemRows || []).map(mapEvaluationItem);
     const totalScore = items.reduce((sum, item) => sum + item.score, 0);
@@ -304,7 +307,7 @@ export async function getAllEvaluations(): Promise<EvaluationWithDetails[]> {
 // ============================================
 
 export async function getCertificationsForLearner(learnerId: string): Promise<CertificationWithDetails[]> {
-  const { data: certs } = await supabase
+  const { data: certs } = await sb()
     .from('certifications').select('*').eq('learner_id', learnerId)
     .order('applied_at', { ascending: false });
   if (!certs) return [];
@@ -313,7 +316,7 @@ export async function getCertificationsForLearner(learnerId: string): Promise<Ce
 }
 
 export async function getAllCertifications(): Promise<CertificationWithDetails[]> {
-  const { data: certs } = await supabase
+  const { data: certs } = await sb()
     .from('certifications').select('*').order('applied_at', { ascending: false });
   if (!certs) return [];
   const results = await Promise.all(certs.map(buildCertificationWithDetails));
@@ -321,14 +324,14 @@ export async function getAllCertifications(): Promise<CertificationWithDetails[]
 }
 
 export async function getCertificationById(id: string): Promise<CertificationWithDetails | null> {
-  const { data: cert } = await supabase.from('certifications').select('*').eq('id', id).single();
+  const { data: cert } = await sb().from('certifications').select('*').eq('id', id).single();
   if (!cert) return null;
   return buildCertificationWithDetails(cert);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function buildCertificationWithDetails(cert: any): Promise<CertificationWithDetails | null> {
-  const { data: levelData } = await supabase
+  const { data: levelData } = await sb()
     .from('certification_levels').select('*').eq('id', cert.level_id).single();
   const applicant = await getUserById(cert.applicant_id);
   const learner = await getUserById(cert.learner_id);
@@ -349,7 +352,7 @@ async function buildCertificationWithDetails(cert: any): Promise<CertificationWi
 }
 
 export async function getCertificationLevels(): Promise<CertificationLevel[]> {
-  const { data } = await supabase.from('certification_levels').select('*').order('sort_order');
+  const { data } = await sb().from('certification_levels').select('*').order('sort_order');
   return (data || []).map(mapCertificationLevel);
 }
 
@@ -358,18 +361,18 @@ export async function getCertificationLevels(): Promise<CertificationLevel[]> {
 // ============================================
 
 export async function getDashboardStats() {
-  const { count: totalLearners } = await supabase
+  const { count: totalLearners } = await sb()
     .from('users').select('*', { count: 'exact', head: true }).eq('role', 'learner');
-  const { count: pendingCertifications } = await supabase
+  const { count: pendingCertifications } = await sb()
     .from('certifications').select('*', { count: 'exact', head: true }).eq('status', 'pending');
 
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const { count: recentEvaluations } = await supabase
+  const { count: recentEvaluations } = await sb()
     .from('evaluations').select('*', { count: 'exact', head: true })
     .gte('evaluated_at', thirtyDaysAgo.toISOString());
 
-  const { count: totalCurricula } = await supabase
+  const { count: totalCurricula } = await sb()
     .from('curricula').select('*', { count: 'exact', head: true });
 
   return {
@@ -397,7 +400,7 @@ export async function addEvaluation(
   const totalScore = items.reduce((sum, item) => sum + item.score, 0);
   const passed = totalScore >= 61 && ngItemCodes.length === 0;
 
-  const { data: newEval, error } = await supabase.from('evaluations').insert({
+  const { data: newEval, error } = await sb().from('evaluations').insert({
     learner_id: learnerId, evaluator_id: evaluatorId, track,
     status: 'submitted', total_score: totalScore, passed, ng_items: ngItemCodes,
     overall_comment: overallComment || null, good_points: goodPoints,
@@ -413,7 +416,7 @@ export async function addEvaluation(
     score: item.score,
     comment: item.comment || null,
   }));
-  await supabase.from('evaluation_items').insert(itemRows);
+  await sb().from('evaluation_items').insert(itemRows);
 
   return mapEvaluation(newEval);
 }
@@ -423,7 +426,7 @@ export async function addEvaluation(
 // ============================================
 
 export async function getAllSubjects(): Promise<Subject[]> {
-  const { data } = await supabase.from('subjects').select('*').order('sort_order');
+  const { data } = await sb().from('subjects').select('*').order('sort_order');
   return (data || []).map(mapSubject);
 }
 
@@ -436,7 +439,7 @@ export async function updateProgressStatus(
 ): Promise<CourseProgress> {
   const now = new Date().toISOString();
   // 既存チェック
-  const { data: existing } = await supabase
+  const { data: existing } = await sb()
     .from('course_progresses').select('*')
     .eq('user_id', userId).eq('subject_id', subjectId).single();
 
@@ -451,13 +454,13 @@ export async function updateProgressStatus(
       updates.started_at = null;
       updates.completed_at = null;
     }
-    const { data } = await supabase.from('course_progresses')
+    const { data } = await sb().from('course_progresses')
       .update(updates).eq('id', existing.id).select().single();
     return mapCourseProgress(data);
   }
 
   // 新規作成
-  const { data } = await supabase.from('course_progresses').insert({
+  const { data } = await sb().from('course_progresses').insert({
     user_id: userId, subject_id: subjectId, status,
     started_at: status !== 'not_started' ? now : null,
     completed_at: status === 'completed' ? now : null,
@@ -469,17 +472,17 @@ export async function updateProgressMemo(
   userId: string, subjectId: string, memo: string,
 ): Promise<CourseProgress> {
   const now = new Date().toISOString();
-  const { data: existing } = await supabase
+  const { data: existing } = await sb()
     .from('course_progresses').select('*')
     .eq('user_id', userId).eq('subject_id', subjectId).single();
 
   if (existing) {
-    const { data } = await supabase.from('course_progresses')
+    const { data } = await sb().from('course_progresses')
       .update({ memo: memo || null, updated_at: now }).eq('id', existing.id).select().single();
     return mapCourseProgress(data);
   }
 
-  const { data } = await supabase.from('course_progresses').insert({
+  const { data } = await sb().from('course_progresses').insert({
     user_id: userId, subject_id: subjectId, status: 'not_started', memo: memo || null,
   }).select().single();
   return mapCourseProgress(data);
@@ -490,19 +493,19 @@ export async function updateProgressDates(
   startedAt: string | null, completedAt: string | null,
 ): Promise<CourseProgress> {
   const now = new Date().toISOString();
-  const { data: existing } = await supabase
+  const { data: existing } = await sb()
     .from('course_progresses').select('*')
     .eq('user_id', userId).eq('subject_id', subjectId).single();
 
   if (existing) {
-    const { data } = await supabase.from('course_progresses')
+    const { data } = await sb().from('course_progresses')
       .update({ started_at: startedAt, completed_at: completedAt, updated_at: now })
       .eq('id', existing.id).select().single();
     return mapCourseProgress(data);
   }
 
   const status = completedAt ? 'completed' : startedAt ? 'in_progress' : 'not_started';
-  const { data } = await supabase.from('course_progresses').insert({
+  const { data } = await sb().from('course_progresses').insert({
     user_id: userId, subject_id: subjectId, status,
     started_at: startedAt, completed_at: completedAt,
   }).select().single();
@@ -510,7 +513,7 @@ export async function updateProgressDates(
 }
 
 export async function updateSubjectHours(subjectId: string, hours: number): Promise<boolean> {
-  const { error } = await supabase.from('subjects').update({ hours }).eq('id', subjectId);
+  const { error } = await sb().from('subjects').update({ hours }).eq('id', subjectId);
   return !error;
 }
 
@@ -522,7 +525,7 @@ export async function addCertification(
   learnerId: string, levelId: string, applicantId: string,
   reason: string, track: TrackCode | null,
 ) {
-  const { data, error } = await supabase.from('certifications').insert({
+  const { data, error } = await sb().from('certifications').insert({
     learner_id: learnerId, level_id: levelId, track,
     applicant_id: applicantId, status: 'pending', reason,
   }).select().single();
@@ -534,16 +537,16 @@ export async function addCertification(
 export async function approveCertification(certId: string, approverId: string) {
   const now = new Date().toISOString();
   // 認定を更新
-  const { data: cert } = await supabase.from('certifications')
+  const { data: cert } = await sb().from('certifications')
     .update({ status: 'certified', approver_id: approverId, decided_at: now })
     .eq('id', certId).select().single();
   if (!cert) return;
 
   // 研修者のレベルを更新
-  const { data: level } = await supabase
+  const { data: level } = await sb()
     .from('certification_levels').select('code').eq('id', cert.level_id).single();
   if (level) {
-    await supabase.from('users')
+    await sb().from('users')
       .update({ current_level: level.code }).eq('id', cert.learner_id);
   }
 }
@@ -551,7 +554,7 @@ export async function approveCertification(certId: string, approverId: string) {
 /** 認定を差し戻し */
 export async function rejectCertification(certId: string, approverId: string, rejectionReason: string) {
   const now = new Date().toISOString();
-  await supabase.from('certifications').update({
+  await sb().from('certifications').update({
     status: 'rejected', approver_id: approverId,
     rejection_reason: rejectionReason, decided_at: now,
   }).eq('id', certId);
@@ -562,12 +565,12 @@ export async function rejectCertification(certId: string, approverId: string, re
 // ============================================
 
 export async function getAllOrganizations(): Promise<Organization[]> {
-  const { data } = await supabase.from('organizations').select('*');
+  const { data } = await sb().from('organizations').select('*');
   return (data || []).map(mapOrganization);
 }
 
 export async function getStores(): Promise<Organization[]> {
-  const { data } = await supabase.from('organizations').select('*').eq('type', 'store');
+  const { data } = await sb().from('organizations').select('*').eq('type', 'store');
   return (data || []).map(mapOrganization);
 }
 
@@ -575,7 +578,7 @@ export async function addLearner(data: {
   name: string; email: string; organizationId: string;
   tracks: TrackCode[]; hireDate: string | null;
 }): Promise<User> {
-  const { data: newUser, error } = await supabase.from('users').insert({
+  const { data: newUser, error } = await sb().from('users').insert({
     email: data.email, name: data.name, role: 'learner',
     organization_id: data.organizationId, current_level: 'lv0',
     tracks: data.tracks, hire_date: data.hireDate,
@@ -588,7 +591,7 @@ export async function updateLearner(id: string, data: {
   name: string; email: string; organizationId: string;
   tracks: TrackCode[]; hireDate: string | null;
 }): Promise<User | null> {
-  const { data: updated, error } = await supabase.from('users').update({
+  const { data: updated, error } = await sb().from('users').update({
     name: data.name, email: data.email,
     organization_id: data.organizationId,
     tracks: data.tracks, hire_date: data.hireDate,
@@ -598,7 +601,7 @@ export async function updateLearner(id: string, data: {
 }
 
 export async function deleteLearner(id: string): Promise<boolean> {
-  const { error } = await supabase.from('users').delete().eq('id', id).eq('role', 'learner');
+  const { error } = await sb().from('users').delete().eq('id', id).eq('role', 'learner');
   return !error;
 }
 
@@ -609,7 +612,7 @@ export async function deleteLearner(id: string): Promise<boolean> {
 const STAFF_ROLES: UserRole[] = ['admin', 'education_manager', 'evaluator', 'store_manager'];
 
 export async function getStaffList(): Promise<User[]> {
-  const { data } = await supabase.from('users').select('*').in('role', STAFF_ROLES);
+  const { data } = await sb().from('users').select('*').in('role', STAFF_ROLES);
   return (data || []).map(mapUser);
 }
 
@@ -617,7 +620,7 @@ export async function addStaff(data: {
   name: string; email: string; role: UserRole;
   organizationId: string; hireDate: string | null;
 }): Promise<User> {
-  const { data: newUser, error } = await supabase.from('users').insert({
+  const { data: newUser, error } = await sb().from('users').insert({
     email: data.email, name: data.name, role: data.role,
     organization_id: data.organizationId, current_level: 'lv0',
     tracks: [], hire_date: data.hireDate,
@@ -627,7 +630,7 @@ export async function addStaff(data: {
 }
 
 export async function deleteStaff(id: string): Promise<boolean> {
-  const { error } = await supabase.from('users').delete().eq('id', id);
+  const { error } = await sb().from('users').delete().eq('id', id);
   return !error;
 }
 
@@ -635,7 +638,7 @@ export async function updateStaff(id: string, data: {
   name: string; email: string; role: UserRole;
   organizationId: string; hireDate: string | null;
 }): Promise<User | null> {
-  const { data: updated, error } = await supabase.from('users').update({
+  const { data: updated, error } = await sb().from('users').update({
     name: data.name, email: data.email, role: data.role,
     organization_id: data.organizationId, hire_date: data.hireDate,
   }).eq('id', id).select().single();
@@ -648,17 +651,17 @@ export async function updateStaff(id: string, data: {
 // ============================================
 
 export async function getAllCurricula(): Promise<Curriculum[]> {
-  const { data } = await supabase.from('curricula').select('*').order('sort_order');
+  const { data } = await sb().from('curricula').select('*').order('sort_order');
   return (data || []).map(mapCurriculum);
 }
 
 export async function getCurriculumById(id: string): Promise<Curriculum | undefined> {
-  const { data } = await supabase.from('curricula').select('*').eq('id', id).single();
+  const { data } = await sb().from('curricula').select('*').eq('id', id).single();
   return data ? mapCurriculum(data) : undefined;
 }
 
 export async function getSubjectsByCurriculum(curriculumId: string): Promise<Subject[]> {
-  const { data } = await supabase.from('subjects').select('*')
+  const { data } = await sb().from('subjects').select('*')
     .eq('curriculum_id', curriculumId).order('sort_order');
   return (data || []).map(mapSubject);
 }
@@ -668,7 +671,7 @@ export async function updateCurriculum(id: string, data: {
   type: 'common' | 'track' | 'brushup';
   trackCode: TrackCode | null; totalHours: number; isActive: boolean;
 }): Promise<Curriculum | null> {
-  const { data: updated, error } = await supabase.from('curricula').update({
+  const { data: updated, error } = await sb().from('curricula').update({
     name: data.name, description: data.description, type: data.type,
     track_code: data.trackCode, total_hours: data.totalHours, is_active: data.isActive,
   }).eq('id', id).select().single();
@@ -682,11 +685,11 @@ export async function addCurriculum(data: {
   trackCode: TrackCode | null; totalHours: number;
 }): Promise<Curriculum> {
   // 最大sort_orderを取得
-  const { data: maxRow } = await supabase.from('curricula')
+  const { data: maxRow } = await sb().from('curricula')
     .select('sort_order').order('sort_order', { ascending: false }).limit(1).single();
   const maxOrder = maxRow?.sort_order || 0;
 
-  const { data: newCur, error } = await supabase.from('curricula').insert({
+  const { data: newCur, error } = await sb().from('curricula').insert({
     name: data.name, description: data.description, type: data.type,
     track_code: data.trackCode, total_hours: data.totalHours,
     sort_order: maxOrder + 1, is_active: true,
@@ -699,12 +702,12 @@ export async function addSubject(data: {
   curriculumId: string; name: string;
   description: string | null; hours: number;
 }): Promise<Subject> {
-  const { data: maxRow } = await supabase.from('subjects')
+  const { data: maxRow } = await sb().from('subjects')
     .select('sort_order').eq('curriculum_id', data.curriculumId)
     .order('sort_order', { ascending: false }).limit(1).single();
   const maxOrder = maxRow?.sort_order || 0;
 
-  const { data: newSub, error } = await supabase.from('subjects').insert({
+  const { data: newSub, error } = await sb().from('subjects').insert({
     curriculum_id: data.curriculumId, name: data.name,
     description: data.description, hours: data.hours,
     sort_order: maxOrder + 1, is_active: true,
@@ -717,7 +720,7 @@ export async function updateSubject(id: string, data: {
   name: string; description: string | null;
   hours: number; isActive: boolean;
 }): Promise<Subject | null> {
-  const { data: updated, error } = await supabase.from('subjects').update({
+  const { data: updated, error } = await sb().from('subjects').update({
     name: data.name, description: data.description,
     hours: data.hours, is_active: data.isActive,
   }).eq('id', id).select().single();
@@ -726,6 +729,6 @@ export async function updateSubject(id: string, data: {
 }
 
 export async function deleteSubject(id: string): Promise<boolean> {
-  const { error } = await supabase.from('subjects').delete().eq('id', id);
+  const { error } = await sb().from('subjects').delete().eq('id', id);
   return !error;
 }
