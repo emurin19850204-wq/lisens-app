@@ -3,7 +3,6 @@
  * 
  * Supabase Auth でメール＋パスワード認証を行う。
  * ログイン後、auth.users の UID を使って アプリの users テーブルと紐付ける。
- * セッションは Supabase Auth が自動管理する。
  */
 'use client';
 
@@ -14,84 +13,65 @@ import { getUserByEmail, getUserByAuthUid, linkAuthUid } from './data';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/** Auth UIDからアプリユーザーを解決する共通関数 */
+async function resolveAppUser(authUid: string, email?: string): Promise<User | null> {
+  // まずauth_uidで検索
+  const byUid = await getUserByAuthUid(authUid);
+  if (byUid) return byUid;
+
+  // 未紐付けの場合、メールで検索して紐付け
+  if (email) {
+    const byEmail = await getUserByEmail(email);
+    if (byEmail) {
+      await linkAuthUid(byEmail.id, authUid);
+      return byEmail;
+    }
+  }
+  return null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // 初期化: Supabase Auth セッションを復元
   useEffect(() => {
+    let mounted = true;
+
     const initAuth = async () => {
       try {
         const supabase = getSupabase();
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (session?.user) {
-          // auth_uid でアプリユーザーを検索
-          let appUser = await getUserByAuthUid(session.user.id);
-          
-          if (!appUser && session.user.email) {
-            // auth_uid未紐付け → メールで検索して紐付け
-            appUser = await getUserByEmail(session.user.email);
-            if (appUser) {
-              await linkAuthUid(appUser.id, session.user.id);
-            }
-          }
-          
-          setUser(appUser || null);
+        if (session?.user && mounted) {
+          const appUser = await resolveAppUser(session.user.id, session.user.email);
+          setUser(appUser);
         }
       } catch (e) {
         console.error('認証初期化エラー:', e);
       } finally {
-        setIsLoading(false);
+        if (mounted) setIsLoading(false);
       }
     };
     initAuth();
 
-    // 認証状態の変更を監視
-    const supabase = getSupabase();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (session?.user) {
-          let appUser = await getUserByAuthUid(session.user.id);
-          if (!appUser && session.user.email) {
-            appUser = await getUserByEmail(session.user.email);
-            if (appUser) {
-              await linkAuthUid(appUser.id, session.user.id);
-            }
-          }
-          setUser(appUser || null);
-        } else {
-          setUser(null);
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
+    return () => { mounted = false; };
   }, []);
 
   // ログイン処理（Supabase Auth）
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
     try {
       const supabase = getSupabase();
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
         console.error('Supabase Auth ログインエラー:', error.message);
         return false;
       }
       
-      // onAuthStateChange で自動的にユーザー設定される
-      // 念のため直接も設定
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        let appUser = await getUserByAuthUid(session.user.id);
-        if (!appUser && session.user.email) {
-          appUser = await getUserByEmail(session.user.email);
-          if (appUser) {
-            await linkAuthUid(appUser.id, session.user.id);
-          }
-        }
-        setUser(appUser || null);
+      if (data.user) {
+        const appUser = await resolveAppUser(data.user.id, data.user.email ?? undefined);
+        setUser(appUser);
         return !!appUser;
       }
       return false;
@@ -106,11 +86,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const supabase = getSupabase();
       await supabase.auth.signOut();
-      setUser(null);
     } catch (e) {
       console.error('ログアウトエラー:', e);
-      setUser(null);
     }
+    setUser(null);
   }, []);
 
   return (

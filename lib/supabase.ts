@@ -13,7 +13,16 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 /** Supabaseクライアント（ブラウザ用、ビルド時はnull） */
 export const supabase: SupabaseClient | null =
   supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          // Web Locks API の競合を回避する設定
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false,
+          // ストレージキーを一意にして競合を防止
+          storageKey: 'lisens-auth-token',
+        },
+      })
     : null;
 
 /**
