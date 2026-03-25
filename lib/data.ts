@@ -732,3 +732,15 @@ export async function deleteSubject(id: string): Promise<boolean> {
   const { error } = await sb().from('subjects').delete().eq('id', id);
   return !error;
 }
+
+// ============================================
+// 認証関連
+// ============================================
+
+/** Supabase Auth の UID をアプリの users テーブルに紐付ける */
+export async function linkAuthUid(userId: string, authUid: string): Promise<boolean> {
+  const { error } = await sb().from('users')
+    .update({ auth_uid: authUid })
+    .eq('id', userId);
+  return !error;
+}

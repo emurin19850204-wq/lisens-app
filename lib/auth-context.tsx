@@ -1,35 +1,43 @@
 /**
- * LISENS - 認証コンテキスト（簡易メール認証版）
+ * LISENS - 認証コンテキスト（Supabase Auth版）
  * 
- * Supabase Auth ではなく、usersテーブルのメールアドレスで直接認証する。
- * 社内利用のため、パスワードは使用しない（メールアドレスだけでログイン）。
- * セッションはlocalStorageに保存。
+ * Supabase Auth でメール＋パスワード認証を行う。
+ * ログイン後、auth.users の UID を使って アプリの users テーブルと紐付ける。
+ * セッションは Supabase Auth が自動管理する。
  */
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { User, AuthContextType } from './types';
-import { getUserByEmail } from './data';
+import { getSupabase } from './supabase';
+import { getUserByEmail, getUserByAuthUid, linkAuthUid } from './data';
 
-const AUTH_STORAGE_KEY = 'lisens_auth_email';
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 初期化: localStorageからメールアドレスを復元
+  // 初期化: Supabase Auth セッションを復元
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const savedEmail = localStorage.getItem(AUTH_STORAGE_KEY);
-        if (savedEmail) {
-          const appUser = await getUserByEmail(savedEmail);
-          setUser(appUser || null);
-          if (!appUser) {
-            // メールが見つからない場合はストレージをクリア
-            localStorage.removeItem(AUTH_STORAGE_KEY);
+        const supabase = getSupabase();
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          // auth_uid でアプリユーザーを検索
+          let appUser = await getUserByAuthUid(session.user.id);
+          
+          if (!appUser && session.user.email) {
+            // auth_uid未紐付け → メールで検索して紐付け
+            appUser = await getUserByEmail(session.user.email);
+            if (appUser) {
+              await linkAuthUid(appUser.id, session.user.id);
+            }
           }
+          
+          setUser(appUser || null);
         }
       } catch (e) {
         console.error('認証初期化エラー:', e);
@@ -38,17 +46,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
     initAuth();
+
+    // 認証状態の変更を監視
+    const supabase = getSupabase();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        if (session?.user) {
+          let appUser = await getUserByAuthUid(session.user.id);
+          if (!appUser && session.user.email) {
+            appUser = await getUserByEmail(session.user.email);
+            if (appUser) {
+              await linkAuthUid(appUser.id, session.user.id);
+            }
+          }
+          setUser(appUser || null);
+        } else {
+          setUser(null);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  // ログイン処理（メールアドレスでusersテーブルを検索）
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const login = useCallback(async (email: string, _password: string): Promise<boolean> => {
+  // ログイン処理（Supabase Auth）
+  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
     try {
-      const appUser = await getUserByEmail(email);
-      if (appUser) {
-        setUser(appUser);
-        localStorage.setItem(AUTH_STORAGE_KEY, email);
-        return true;
+      const supabase = getSupabase();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) {
+        console.error('Supabase Auth ログインエラー:', error.message);
+        return false;
+      }
+      
+      // onAuthStateChange で自動的にユーザー設定される
+      // 念のため直接も設定
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        let appUser = await getUserByAuthUid(session.user.id);
+        if (!appUser && session.user.email) {
+          appUser = await getUserByEmail(session.user.email);
+          if (appUser) {
+            await linkAuthUid(appUser.id, session.user.id);
+          }
+        }
+        setUser(appUser || null);
+        return !!appUser;
       }
       return false;
     } catch (e) {
@@ -58,9 +102,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ログアウト処理
-  const logout = useCallback(() => {
-    setUser(null);
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+  const logout = useCallback(async () => {
+    try {
+      const supabase = getSupabase();
+      await supabase.auth.signOut();
+      setUser(null);
+    } catch (e) {
+      console.error('ログアウトエラー:', e);
+      setUser(null);
+    }
   }, []);
 
   return (
