@@ -6,7 +6,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { getStaffList, getOrganizationById, deleteStaff } from '@/lib/data';
+import { getStaffList, getOrganizationById } from '@/lib/data';
+import { getSupabase } from '@/lib/supabase';
 import { ROLE_LABELS, LEVEL_LABELS, LEVEL_BADGE_CLASS } from '@/lib/constants';
 import type { User, Organization } from '@/lib/types';
 
@@ -42,9 +43,28 @@ export default function StaffListPage() {
 
   const handleDelete = async (id: string, name: string) => {
     if (id === user.id) { alert('自分自身を削除することはできません。'); return; }
-    if (!confirm(`${name}さんをスタッフから削除しますか？\nこの操作は元に戻せません。`)) return;
-    await deleteStaff(id);
-    setStaffList(prev => prev.filter(s => s.id !== id));
+    if (!confirm(`${name}さんを削除しますか？\nユーザーアカウントも同時に削除されます。\nこの操作は元に戻せません。`)) return;
+    
+    try {
+      const supabase = getSupabase();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { alert('認証エラー。再ログインしてください。'); return; }
+
+      const res = await fetch('/api/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ userId: id }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setStaffList(prev => prev.filter(s => s.id !== id));
+      } else {
+        alert(data.error || '削除に失敗しました');
+      }
+    } catch {
+      alert('削除中にエラーが発生しました');
+    }
   };
 
   return (
