@@ -1,50 +1,60 @@
 /**
- * LISENS - 認証コンテキスト
+ * LISENS - 認証コンテキスト（簡易メール認証版）
  * 
- * MVPではダミーデータを使ったシンプルな認証を提供する。
- * 将来はSupabase Authに差し替える。
- * 
- * なぜContextを使うか：
- * 認証状態はアプリ全体で共有する必要があり、
- * Server Componentではauthチェックをせず、
- * Client Componentでの表示制御にのみ使用する（MVP方針）。
+ * Supabase Auth ではなく、usersテーブルのメールアドレスで直接認証する。
+ * 社内利用のため、パスワードは使用しない（メールアドレスだけでログイン）。
+ * セッションはlocalStorageに保存。
  */
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { User, AuthContextType } from './types';
-import { users } from './dummy-data';
+import { getUserByEmail } from './data';
 
+const AUTH_STORAGE_KEY = 'lisens_auth_email';
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-/** ローカルストレージのキー */
-const AUTH_STORAGE_KEY = 'lisens_auth_user_id';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 初期化: ローカルストレージからユーザーを復元
+  // 初期化: localStorageからメールアドレスを復元
   useEffect(() => {
-    const savedUserId = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (savedUserId) {
-      const foundUser = users.find(u => u.id === savedUserId);
-      if (foundUser) {
-        setUser(foundUser);
+    const initAuth = async () => {
+      try {
+        const savedEmail = localStorage.getItem(AUTH_STORAGE_KEY);
+        if (savedEmail) {
+          const appUser = await getUserByEmail(savedEmail);
+          setUser(appUser || null);
+          if (!appUser) {
+            // メールが見つからない場合はストレージをクリア
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+          }
+        }
+      } catch (e) {
+        console.error('認証初期化エラー:', e);
+      } finally {
+        setIsLoading(false);
       }
-    }
-    setIsLoading(false);
+    };
+    initAuth();
   }, []);
 
-  // ログイン処理（ダミー: メールが一致すればパスワード不問）
+  // ログイン処理（メールアドレスでusersテーブルを検索）
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const login = useCallback(async (email: string, _password: string): Promise<boolean> => {
-    const foundUser = users.find(u => u.email === email);
-    if (foundUser) {
-      setUser(foundUser);
-      localStorage.setItem(AUTH_STORAGE_KEY, foundUser.id);
-      return true;
+    try {
+      const appUser = await getUserByEmail(email);
+      if (appUser) {
+        setUser(appUser);
+        localStorage.setItem(AUTH_STORAGE_KEY, email);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('ログインエラー:', e);
+      return false;
     }
-    return false;
   }, []);
 
   // ログアウト処理

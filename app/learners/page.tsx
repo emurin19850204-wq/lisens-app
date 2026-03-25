@@ -1,12 +1,9 @@
 /**
- * LISENS - 研修者一覧画面
- *
- * 全研修者の氏名、所属、レベル、トラック、進捗率、直近評価日を一覧で表示する。
- * 検索バーで氏名・所属・トラックで絞り込み可能。
+ * LISENS - 研修者一覧画面（Supabase対応）
  */
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { getLearnerSummaries, deleteLearner } from '@/lib/data';
@@ -14,21 +11,24 @@ import {
   LEVEL_LABELS, LEVEL_BADGE_CLASS,
   TRACK_LABELS, TRACK_BADGE_CLASS,
 } from '@/lib/constants';
+import type { LearnerSummary } from '@/lib/types';
 
-/** 研修者管理が可能なロール */
 const CAN_MANAGE_ROLES = ['admin', 'education_manager'];
 
 export default function LearnersPage() {
   const { user } = useAuth();
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [summaries, setSummaries] = useState<LearnerSummary[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
-  if (!user) return null;
+  useEffect(() => {
+    if (!user) return;
+    getLearnerSummaries(user).then(s => { setSummaries(s); setLoading(false); });
+  }, [user]);
 
-  const summaries = getLearnerSummaries(user);
+  if (!user) return null;
   const canManage = CAN_MANAGE_ROLES.includes(user.role);
 
-  // 検索フィルタ（氏名、所属、トラック、レベルで検索）
   const filteredSummaries = useMemo(() => {
     if (!searchQuery.trim()) return summaries;
     const q = searchQuery.trim().toLowerCase();
@@ -41,24 +41,25 @@ export default function LearnersPage() {
     );
   }, [summaries, searchQuery]);
 
-  // 削除処理
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     if (!confirm(`${name}さんを研修者一覧から削除しますか？\nこの操作は元に戻せません。`)) return;
-    deleteLearner(id);
-    setRefreshKey(prev => prev + 1);
+    await deleteLearner(id);
+    setSummaries(prev => prev.filter(s => s.user.id !== id));
   };
 
+  if (loading) {
+    return <div className="page-container"><div style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}><p className="text-secondary">読み込み中...</p></div></div>;
+  }
+
   return (
-    <div className="page-container" key={refreshKey}>
+    <div className="page-container">
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
         <div>
           <h1 className="page-title">👥 研修者一覧</h1>
           <span className="text-secondary text-sm">{summaries.length}名</span>
         </div>
         {canManage && (
-          <Link href="/learners/new" className="btn btn-primary">
-            ➕ 新規登録
-          </Link>
+          <Link href="/learners/new" className="btn btn-primary">➕ 新規登録</Link>
         )}
       </div>
 
@@ -67,27 +68,13 @@ export default function LearnersPage() {
         <div className="card-body" style={{ padding: 'var(--space-sm) var(--space-md)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
             <span style={{ fontSize: '1.1rem' }}>🔍</span>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="氏名、所属、トラック、レベルで検索..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              style={{ flex: 1, margin: 0, border: 'none', boxShadow: 'none', background: 'transparent', padding: 'var(--space-xs) 0' }}
-            />
+            <input type="text" className="form-input" placeholder="氏名、所属、トラック、レベルで検索..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, margin: 0, border: 'none', boxShadow: 'none', background: 'transparent', padding: 'var(--space-xs) 0' }} />
             {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--color-text-secondary)' }}
-              >
-                ✕
-              </button>
+              <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--color-text-secondary)' }}>✕</button>
             )}
           </div>
           {searchQuery && (
-            <div className="text-sm text-secondary" style={{ marginTop: '2px' }}>
-              {filteredSummaries.length}件がヒット
-            </div>
+            <div className="text-sm text-secondary" style={{ marginTop: '2px' }}>{filteredSummaries.length}件がヒット</div>
           )}
         </div>
       </div>
@@ -99,35 +86,19 @@ export default function LearnersPage() {
             <table>
               <thead>
                 <tr>
-                  <th>氏名</th>
-                  <th>所属</th>
-                  <th>レベル</th>
-                  <th>トラック</th>
-                  <th>進捗率</th>
-                  <th>直近評価日</th>
-                  <th>操作</th>
+                  <th>氏名</th><th>所属</th><th>レベル</th><th>トラック</th><th>進捗率</th><th>直近評価日</th><th>操作</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredSummaries.map(s => (
                   <tr key={s.user.id}>
-                    <td>
-                      <Link href={`/learners/${s.user.id}`} style={{ fontWeight: 600 }}>
-                        {s.user.name}
-                      </Link>
-                    </td>
+                    <td><Link href={`/learners/${s.user.id}`} style={{ fontWeight: 600 }}>{s.user.name}</Link></td>
                     <td>{s.organization.name}</td>
-                    <td>
-                      <span className={`badge ${LEVEL_BADGE_CLASS[s.user.currentLevel]}`}>
-                        {s.currentLevelName}
-                      </span>
-                    </td>
+                    <td><span className={`badge ${LEVEL_BADGE_CLASS[s.user.currentLevel]}`}>{s.currentLevelName}</span></td>
                     <td>
                       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                         {s.user.tracks.map(t => (
-                          <span key={t} className={`badge ${TRACK_BADGE_CLASS[t]}`} style={{ fontSize: '0.7rem', padding: '1px 6px' }}>
-                            {TRACK_LABELS[t]}
-                          </span>
+                          <span key={t} className={`badge ${TRACK_BADGE_CLASS[t]}`} style={{ fontSize: '0.7rem', padding: '1px 6px' }}>{TRACK_LABELS[t]}</span>
                         ))}
                         {s.user.tracks.length === 0 && <span className="text-secondary text-sm">—</span>}
                       </div>
@@ -135,64 +106,27 @@ export default function LearnersPage() {
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
                         <div className="progress-bar" style={{ width: '80px' }}>
-                          <div
-                            className={`progress-bar-fill ${s.overallProgress === 100 ? 'completed' : ''}`}
-                            style={{ width: `${s.overallProgress}%` }}
-                          />
+                          <div className={`progress-bar-fill ${s.overallProgress === 100 ? 'completed' : ''}`} style={{ width: `${s.overallProgress}%` }} />
                         </div>
                         <span className="text-sm">{s.overallProgress}%</span>
                       </div>
                     </td>
-                    <td className="text-sm text-secondary">
-                      {s.lastEvaluationDate
-                        ? new Date(s.lastEvaluationDate).toLocaleDateString('ja-JP')
-                        : '—'}
-                    </td>
+                    <td className="text-sm text-secondary">{s.lastEvaluationDate ? new Date(s.lastEvaluationDate).toLocaleDateString('ja-JP') : '—'}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '4px' }}>
-                        <Link href={`/learners/${s.user.id}`} className="btn btn-outline btn-sm">
-                          カルテ
-                        </Link>
+                        <Link href={`/learners/${s.user.id}`} className="btn btn-outline btn-sm">カルテ</Link>
                         {canManage && (
-                          <button
-                            className="btn btn-sm"
-                            style={{ color: 'var(--color-danger)', border: '1px solid var(--color-danger)', background: 'transparent', cursor: 'pointer' }}
-                            onClick={() => handleDelete(s.user.id, s.user.name)}
-                          >
-                            🗑
-                          </button>
+                          <button className="btn btn-sm" style={{ color: 'var(--color-danger)', border: '1px solid var(--color-danger)', background: 'transparent', cursor: 'pointer' }} onClick={() => handleDelete(s.user.id, s.user.name)}>🗑</button>
                         )}
                       </div>
                     </td>
                   </tr>
                 ))}
                 {filteredSummaries.length === 0 && summaries.length > 0 && (
-                  <tr>
-                    <td colSpan={7}>
-                      <div className="empty-state" style={{ padding: 'var(--space-lg)' }}>
-                        <div className="empty-state-icon">🔍</div>
-                        <p>「{searchQuery}」に一致する研修者が見つかりません</p>
-                        <button className="btn btn-outline" style={{ marginTop: 'var(--space-sm)' }} onClick={() => setSearchQuery('')}>
-                          検索をクリア
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <tr><td colSpan={7}><div className="empty-state" style={{ padding: 'var(--space-lg)' }}><div className="empty-state-icon">🔍</div><p>「{searchQuery}」に一致する研修者が見つかりません</p><button className="btn btn-outline" style={{ marginTop: 'var(--space-sm)' }} onClick={() => setSearchQuery('')}>検索をクリア</button></div></td></tr>
                 )}
                 {summaries.length === 0 && (
-                  <tr>
-                    <td colSpan={7}>
-                      <div className="empty-state">
-                        <div className="empty-state-icon">📭</div>
-                        <p>表示できる研修者がいません</p>
-                        {canManage && (
-                          <Link href="/learners/new" className="btn btn-primary" style={{ marginTop: 'var(--space-md)' }}>
-                            ➕ 最初の研修者を登録する
-                          </Link>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                  <tr><td colSpan={7}><div className="empty-state"><div className="empty-state-icon">📭</div><p>表示できる研修者がいません</p>{canManage && (<Link href="/learners/new" className="btn btn-primary" style={{ marginTop: 'var(--space-md)' }}>➕ 最初の研修者を登録する</Link>)}</div></td></tr>
                 )}
               </tbody>
             </table>

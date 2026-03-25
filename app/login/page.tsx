@@ -1,17 +1,14 @@
 /**
- * LISENS - ログイン画面
+ * LISENS - ログイン画面（Supabase Auth版）
  * 
- * メールアドレスを入力してログインする。
- * MVPではパスワード検証なし（ダミー認証）。
- * ログインアカウントの一覧も表示して、テスト用に簡単に切り替えられるようにする。
+ * メールアドレス＋パスワードでSupabase Authにログインする。
+ * テスト用アカウント一覧は削除済み。
  */
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { users } from '@/lib/dummy-data';
-import { ROLE_LABELS } from '@/lib/constants';
 import styles from './login.module.css';
 
 export default function LoginPage() {
@@ -27,22 +24,17 @@ export default function LoginPage() {
     setError('');
     setIsSubmitting(true);
 
-    const success = await login(email, password);
-    if (success) {
-      router.push('/');
-    } else {
-      setError('メールアドレスが正しくありません');
+    try {
+      const success = await login(email, password);
+      if (success) {
+        router.push('/');
+      } else {
+        setError('メールアドレスまたはパスワードが正しくありません。アカウントが登録されていない可能性があります。');
+      }
+    } catch {
+      setError('ログイン中にエラーが発生しました。');
     }
     setIsSubmitting(false);
-  };
-
-  // テスト用：アカウントをクリックして即ログイン
-  const handleQuickLogin = async (userEmail: string) => {
-    setEmail(userEmail);
-    const success = await login(userEmail, 'password123');
-    if (success) {
-      router.push('/');
-    }
   };
 
   return (
@@ -64,7 +56,7 @@ export default function LoginPage() {
               className="form-input"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="admin@example.com"
+              placeholder="your@element.com"
               required
             />
           </div>
@@ -77,6 +69,7 @@ export default function LoginPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="パスワード"
+              required
             />
           </div>
           {error && <div className={styles.error}>{error}</div>}
@@ -84,24 +77,6 @@ export default function LoginPage() {
             {isSubmitting ? 'ログイン中...' : 'ログイン'}
           </button>
         </form>
-
-        {/* テスト用アカウント一覧 */}
-        <div className={styles.testAccounts}>
-          <p className={styles.testAccountsTitle}>🧪 テスト用アカウント（クリックでログイン）</p>
-          <div className={styles.accountList}>
-            {users.map(u => (
-              <button
-                key={u.id}
-                className={styles.accountItem}
-                onClick={() => handleQuickLogin(u.email)}
-              >
-                <span className={styles.accountName}>{u.name}</span>
-                <span className={styles.accountRole}>{ROLE_LABELS[u.role]}</span>
-                <span className={styles.accountEmail}>{u.email}</span>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );

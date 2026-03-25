@@ -1,22 +1,24 @@
 /**
  * LISENS - ホーム画面（ダッシュボード）
  * 
- * ロール別に表示内容を変える。
- * - 管理系ロール: 統計カード + 承認待ちの認定
- * - 受講者: 自分のカルテに自動リダイレクト
+ * ロール別に表示内容を変える。Supabase対応（非同期データ取得）。
  */
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { getDashboardStats, getAllCertifications } from '@/lib/data';
 import { ROLE_LABELS, CERTIFICATION_STATUS_BADGE_CLASS } from '@/lib/constants';
+import type { CertificationWithDetails } from '@/lib/types';
 
 export default function HomePage() {
   const { user } = useAuth();
   const router = useRouter();
+  const [stats, setStats] = useState({ totalLearners: 0, pendingCertifications: 0, recentEvaluations: 0, totalCurricula: 0 });
+  const [pendingCerts, setPendingCerts] = useState<CertificationWithDetails[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // 受講者は自分のカルテに自動リダイレクト
   useEffect(() => {
@@ -25,9 +27,19 @@ export default function HomePage() {
     }
   }, [user, router]);
 
-  if (!user) return null;
+  // データ取得
+  useEffect(() => {
+    if (!user || user.role === 'learner') return;
+    const load = async () => {
+      const [s, certs] = await Promise.all([getDashboardStats(), getAllCertifications()]);
+      setStats(s);
+      setPendingCerts(certs.filter(c => c.certification.status === 'pending'));
+      setLoading(false);
+    };
+    load();
+  }, [user]);
 
-  // 受講者はリダイレクト中
+  if (!user) return null;
   if (user.role === 'learner') {
     return (
       <div className="page-container">
@@ -38,9 +50,15 @@ export default function HomePage() {
     );
   }
 
-  // 管理系ロール向けダッシュボード
-  const stats = getDashboardStats();
-  const pendingCerts = getAllCertifications().filter(c => c.certification.status === 'pending');
+  if (loading) {
+    return (
+      <div className="page-container">
+        <div style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}>
+          <p className="text-secondary">読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-container">
@@ -101,11 +119,7 @@ export default function HomePage() {
 
 /** 統計カード */
 function StatCard({ icon, label, value, linkTo, highlight }: {
-  icon: string;
-  label: string;
-  value: number;
-  linkTo?: string;
-  highlight?: boolean;
+  icon: string; label: string; value: number; linkTo?: string; highlight?: boolean;
 }) {
   const content = (
     <div className="card" style={{
@@ -121,9 +135,6 @@ function StatCard({ icon, label, value, linkTo, highlight }: {
       <div className="text-secondary text-sm">{label}</div>
     </div>
   );
-
-  if (linkTo) {
-    return <Link href={linkTo} style={{ textDecoration: 'none' }}>{content}</Link>;
-  }
+  if (linkTo) return <Link href={linkTo} style={{ textDecoration: 'none' }}>{content}</Link>;
   return content;
 }

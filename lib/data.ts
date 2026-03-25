@@ -1,40 +1,168 @@
 /**
- * LISENS - データアクセス層
+ * LISENS - データアクセス層（Supabase版）
  * 
- * ダミーデータからUIに必要な形式のデータを取得するユーティリティ。
- * 将来はSupabase clientに差し替える。
+ * Supabaseからデータを取得し、アプリの型に変換するユーティリティ。
+ * 全関数が非同期（async）に変更されている。
  */
 
+import { supabase } from './supabase';
 import type {
   User, UserRole, Organization, LearnerSummary, LearnerDetail,
   CurriculumProgress, SubjectProgress, EvaluationWithDetails,
   CertificationWithDetails, CertificationLevel, Evaluation,
   EvaluationItem, EvaluationItemName, TrackCode,
+  ProgressStatus, CourseProgress, Curriculum, Subject,
+  CertificationLevelCode,
 } from './types';
-import {
-  users, organizations, curricula, subjects, courseProgresses,
-  evaluations, evaluationItems, certificationLevels, certifications,
-} from './dummy-data';
 import { LEVEL_LABELS, OSCE_TOTAL_SCORE } from './constants';
+
+// ============================================
+// DB行 → アプリ型 の変換ヘルパー
+// ============================================
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function mapUser(row: any): User {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    role: row.role as UserRole,
+    organizationId: row.organization_id,
+    currentLevel: row.current_level as CertificationLevelCode,
+    tracks: (row.tracks || []) as TrackCode[],
+    hireDate: row.hire_date,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapOrganization(row: any): Organization {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    parentId: row.parent_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapCurriculum(row: any): Curriculum {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    type: row.type,
+    trackCode: row.track_code as TrackCode | null,
+    totalHours: Number(row.total_hours),
+    sortOrder: row.sort_order,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapSubject(row: any): Subject {
+  return {
+    id: row.id,
+    curriculumId: row.curriculum_id,
+    name: row.name,
+    description: row.description,
+    hours: Number(row.hours),
+    sortOrder: row.sort_order,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapCourseProgress(row: any): CourseProgress {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    subjectId: row.subject_id,
+    status: row.status as ProgressStatus,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    memo: row.memo,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapEvaluation(row: any): Evaluation {
+  return {
+    id: row.id,
+    learnerId: row.learner_id,
+    evaluatorId: row.evaluator_id,
+    track: row.track as TrackCode,
+    status: row.status,
+    totalScore: row.total_score,
+    passed: row.passed,
+    ngItems: row.ng_items || [],
+    overallComment: row.overall_comment,
+    goodPoints: row.good_points || [],
+    improvementPoints: row.improvement_points || [],
+    evaluatedAt: row.evaluated_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapEvaluationItem(row: any): EvaluationItem {
+  return {
+    id: row.id,
+    evaluationId: row.evaluation_id,
+    itemName: row.item_name as EvaluationItemName,
+    score: row.score,
+    comment: row.comment,
+    createdAt: row.created_at,
+  };
+}
+
+function mapCertificationLevel(row: any): CertificationLevel {
+  return {
+    id: row.id,
+    code: row.code as CertificationLevelCode,
+    name: row.name,
+    sortOrder: row.sort_order,
+    description: row.description,
+    requirements: row.requirements,
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // ============================================
 // ユーザー・組織の取得
 // ============================================
 
-export function getUserById(id: string): User | undefined {
-  return users.find(u => u.id === id);
+export async function getUserById(id: string): Promise<User | undefined> {
+  const { data } = await supabase.from('users').select('*').eq('id', id).single();
+  return data ? mapUser(data) : undefined;
 }
 
-export function getOrganizationById(id: string): Organization | undefined {
-  return organizations.find(o => o.id === id);
+export async function getUserByEmail(email: string): Promise<User | undefined> {
+  const { data } = await supabase.from('users').select('*').eq('email', email).single();
+  return data ? mapUser(data) : undefined;
 }
 
-export function getLearners(): User[] {
-  return users.filter(u => u.role === 'learner');
+export async function getUserByAuthUid(authUid: string): Promise<User | undefined> {
+  const { data } = await supabase.from('users').select('*').eq('auth_uid', authUid).single();
+  return data ? mapUser(data) : undefined;
 }
 
-export function getLearnersForRole(currentUser: User): User[] {
-  const allLearners = getLearners();
+export async function getOrganizationById(id: string): Promise<Organization | undefined> {
+  const { data } = await supabase.from('organizations').select('*').eq('id', id).single();
+  return data ? mapOrganization(data) : undefined;
+}
+
+export async function getLearners(): Promise<User[]> {
+  const { data } = await supabase.from('users').select('*').eq('role', 'learner');
+  return (data || []).map(mapUser);
+}
+
+export async function getLearnersForRole(currentUser: User): Promise<User[]> {
+  const allLearners = await getLearners();
   switch (currentUser.role) {
     case 'admin':
     case 'education_manager':
@@ -53,69 +181,76 @@ export function getLearnersForRole(currentUser: User): User[] {
 // 受講者サマリー
 // ============================================
 
-export function getLearnerSummary(userId: string): LearnerSummary | undefined {
-  const user = getUserById(userId);
+export async function getLearnerSummary(userId: string): Promise<LearnerSummary | undefined> {
+  const user = await getUserById(userId);
   if (!user) return undefined;
-  const org = getOrganizationById(user.organizationId);
+  const org = await getOrganizationById(user.organizationId);
   if (!org) return undefined;
 
-  const progresses = courseProgresses.filter(p => p.userId === userId);
-  const totalSubjects = progresses.length;
-  const completedSubjects = progresses.filter(p => p.status === 'completed').length;
-  const overallProgress = totalSubjects > 0 ? Math.round((completedSubjects / totalSubjects) * 100) : 0;
+  const { data: progresses } = await supabase
+    .from('course_progresses').select('*').eq('user_id', userId);
+  const total = progresses?.length || 0;
+  const completed = progresses?.filter(p => p.status === 'completed').length || 0;
+  const overallProgress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-  const userEvals = evaluations.filter(e => e.learnerId === userId);
-  const lastEval = userEvals.sort((a, b) =>
-    new Date(b.evaluatedAt).getTime() - new Date(a.evaluatedAt).getTime()
-  )[0];
+  const { data: evals } = await supabase
+    .from('evaluations').select('evaluated_at').eq('learner_id', userId)
+    .order('evaluated_at', { ascending: false }).limit(1);
+  const lastEval = evals?.[0];
 
   return {
     user, organization: org, overallProgress,
-    lastEvaluationDate: lastEval?.evaluatedAt || null,
+    lastEvaluationDate: lastEval?.evaluated_at || null,
     currentLevelName: LEVEL_LABELS[user.currentLevel],
   };
 }
 
-export function getLearnerSummaries(currentUser: User): LearnerSummary[] {
-  return getLearnersForRole(currentUser)
-    .map(l => getLearnerSummary(l.id))
-    .filter((s): s is LearnerSummary => s !== undefined);
+export async function getLearnerSummaries(currentUser: User): Promise<LearnerSummary[]> {
+  const learners = await getLearnersForRole(currentUser);
+  const summaries = await Promise.all(learners.map(l => getLearnerSummary(l.id)));
+  return summaries.filter((s): s is LearnerSummary => s !== undefined);
 }
 
 // ============================================
 // 受講者詳細（個人カルテ）
 // ============================================
 
-export function getLearnerDetail(userId: string): LearnerDetail | undefined {
-  const user = getUserById(userId);
+export async function getLearnerDetail(userId: string): Promise<LearnerDetail | undefined> {
+  const user = await getUserById(userId);
   if (!user) return undefined;
-  const org = getOrganizationById(user.organizationId);
+  const org = await getOrganizationById(user.organizationId);
   if (!org) return undefined;
-  const currentLevel = certificationLevels.find(l => l.code === user.currentLevel);
-  if (!currentLevel) return undefined;
 
-  return {
-    user, organization: org,
-    curriculumProgresses: getCurriculumProgresses(userId),
-    evaluations: getEvaluationsWithDetails(userId),
-    certifications: getCertificationsForLearner(userId),
-    currentLevel,
-  };
+  const { data: levelData } = await supabase
+    .from('certification_levels').select('*').eq('code', user.currentLevel).single();
+  if (!levelData) return undefined;
+  const currentLevel = mapCertificationLevel(levelData);
+
+  const [curriculumProgresses, evaluations, certifications] = await Promise.all([
+    getCurriculumProgresses(userId),
+    getEvaluationsWithDetails(userId),
+    getCertificationsForLearner(userId),
+  ]);
+
+  return { user, organization: org, curriculumProgresses, evaluations, certifications, currentLevel };
 }
 
-function getCurriculumProgresses(userId: string): CurriculumProgress[] {
-  return curricula.map(cur => {
-    const curSubjects = subjects.filter(s => s.curriculumId === cur.id);
+async function getCurriculumProgresses(userId: string): Promise<CurriculumProgress[]> {
+  const { data: curricula } = await supabase.from('curricula').select('*').order('sort_order');
+  const { data: allSubjects } = await supabase.from('subjects').select('*').order('sort_order');
+  const { data: allProgresses } = await supabase
+    .from('course_progresses').select('*').eq('user_id', userId);
+
+  return (curricula || []).map(cur => {
+    const curSubjects = (allSubjects || []).filter(s => s.curriculum_id === cur.id);
     const subjectProgresses: SubjectProgress[] = curSubjects.map(sub => {
-      const progress = courseProgresses.find(
-        p => p.userId === userId && p.subjectId === sub.id
-      ) || null;
-      return { subject: sub, progress };
+      const progress = (allProgresses || []).find(p => p.subject_id === sub.id);
+      return { subject: mapSubject(sub), progress: progress ? mapCourseProgress(progress) : null };
     });
     const total = subjectProgresses.length;
     const completed = subjectProgresses.filter(sp => sp.progress?.status === 'completed').length;
     const progressRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-    return { curriculum: cur, subjects: subjectProgresses, progressRate };
+    return { curriculum: mapCurriculum(cur), subjects: subjectProgresses, progressRate };
   });
 }
 
@@ -123,108 +258,133 @@ function getCurriculumProgresses(userId: string): CurriculumProgress[] {
 // 評価関連
 // ============================================
 
-export function getEvaluationsWithDetails(userId: string): EvaluationWithDetails[] {
-  return evaluations
-    .filter(e => e.learnerId === userId)
-    .map(evaluation => {
-      const evaluator = getUserById(evaluation.evaluatorId);
-      if (!evaluator) return null;
-      const items = evaluationItems.filter(ei => ei.evaluationId === evaluation.id);
-      const totalScore = items.reduce((sum, item) => sum + item.score, 0);
-      const scoreRate = Math.round((totalScore / OSCE_TOTAL_SCORE) * 100);
-      return { evaluation, evaluator, items, totalScore, scoreRate };
-    })
-    .filter((e): e is EvaluationWithDetails => e !== null)
-    .sort((a, b) =>
-      new Date(b.evaluation.evaluatedAt).getTime() - new Date(a.evaluation.evaluatedAt).getTime()
-    );
+export async function getEvaluationsWithDetails(userId: string): Promise<EvaluationWithDetails[]> {
+  const { data: evals } = await supabase
+    .from('evaluations').select('*').eq('learner_id', userId)
+    .order('evaluated_at', { ascending: false });
+
+  if (!evals || evals.length === 0) return [];
+
+  const results: EvaluationWithDetails[] = [];
+  for (const evalRow of evals) {
+    const evaluator = await getUserById(evalRow.evaluator_id);
+    if (!evaluator) continue;
+    const { data: itemRows } = await supabase
+      .from('evaluation_items').select('*').eq('evaluation_id', evalRow.id);
+    const items = (itemRows || []).map(mapEvaluationItem);
+    const totalScore = items.reduce((sum, item) => sum + item.score, 0);
+    const scoreRate = Math.round((totalScore / OSCE_TOTAL_SCORE) * 100);
+    results.push({ evaluation: mapEvaluation(evalRow), evaluator, items, totalScore, scoreRate });
+  }
+  return results;
 }
 
-export function getAllEvaluations(): EvaluationWithDetails[] {
-  return evaluations
-    .map(evaluation => {
-      const evaluator = getUserById(evaluation.evaluatorId);
-      if (!evaluator) return null;
-      const items = evaluationItems.filter(ei => ei.evaluationId === evaluation.id);
-      const totalScore = items.reduce((sum, item) => sum + item.score, 0);
-      const scoreRate = Math.round((totalScore / OSCE_TOTAL_SCORE) * 100);
-      return { evaluation, evaluator, items, totalScore, scoreRate };
-    })
-    .filter((e): e is EvaluationWithDetails => e !== null)
-    .sort((a, b) =>
-      new Date(b.evaluation.evaluatedAt).getTime() - new Date(a.evaluation.evaluatedAt).getTime()
-    );
+export async function getAllEvaluations(): Promise<EvaluationWithDetails[]> {
+  const { data: evals } = await supabase
+    .from('evaluations').select('*').order('evaluated_at', { ascending: false });
+
+  if (!evals || evals.length === 0) return [];
+
+  const results: EvaluationWithDetails[] = [];
+  for (const evalRow of evals) {
+    const evaluator = await getUserById(evalRow.evaluator_id);
+    if (!evaluator) continue;
+    const { data: itemRows } = await supabase
+      .from('evaluation_items').select('*').eq('evaluation_id', evalRow.id);
+    const items = (itemRows || []).map(mapEvaluationItem);
+    const totalScore = items.reduce((sum, item) => sum + item.score, 0);
+    const scoreRate = Math.round((totalScore / OSCE_TOTAL_SCORE) * 100);
+    results.push({ evaluation: mapEvaluation(evalRow), evaluator, items, totalScore, scoreRate });
+  }
+  return results;
 }
 
 // ============================================
 // 認定関連
 // ============================================
 
-export function getCertificationsForLearner(learnerId: string): CertificationWithDetails[] {
-  return certifications
-    .filter(c => c.learnerId === learnerId)
-    .map(cert => buildCertificationWithDetails(cert))
-    .filter((c): c is CertificationWithDetails => c !== null)
-    .sort((a, b) =>
-      new Date(b.certification.appliedAt).getTime() - new Date(a.certification.appliedAt).getTime()
-    );
+export async function getCertificationsForLearner(learnerId: string): Promise<CertificationWithDetails[]> {
+  const { data: certs } = await supabase
+    .from('certifications').select('*').eq('learner_id', learnerId)
+    .order('applied_at', { ascending: false });
+  if (!certs) return [];
+  const results = await Promise.all(certs.map(buildCertificationWithDetails));
+  return results.filter((c): c is CertificationWithDetails => c !== null);
 }
 
-export function getAllCertifications(): CertificationWithDetails[] {
-  return certifications
-    .map(cert => buildCertificationWithDetails(cert))
-    .filter((c): c is CertificationWithDetails => c !== null)
-    .sort((a, b) =>
-      new Date(b.certification.appliedAt).getTime() - new Date(a.certification.appliedAt).getTime()
-    );
+export async function getAllCertifications(): Promise<CertificationWithDetails[]> {
+  const { data: certs } = await supabase
+    .from('certifications').select('*').order('applied_at', { ascending: false });
+  if (!certs) return [];
+  const results = await Promise.all(certs.map(buildCertificationWithDetails));
+  return results.filter((c): c is CertificationWithDetails => c !== null);
 }
 
-export function getCertificationById(id: string): CertificationWithDetails | null {
-  const cert = certifications.find(c => c.id === id);
+export async function getCertificationById(id: string): Promise<CertificationWithDetails | null> {
+  const { data: cert } = await supabase.from('certifications').select('*').eq('id', id).single();
   if (!cert) return null;
   return buildCertificationWithDetails(cert);
 }
 
-function buildCertificationWithDetails(cert: typeof certifications[0]): CertificationWithDetails | null {
-  const level = certificationLevels.find(l => l.id === cert.levelId);
-  const applicant = getUserById(cert.applicantId);
-  const learner = getUserById(cert.learnerId);
-  if (!level || !applicant || !learner) return null;
-  const approver = cert.approverId ? getUserById(cert.approverId) || null : null;
-  return { certification: cert, level, applicant, approver, learner };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function buildCertificationWithDetails(cert: any): Promise<CertificationWithDetails | null> {
+  const { data: levelData } = await supabase
+    .from('certification_levels').select('*').eq('id', cert.level_id).single();
+  const applicant = await getUserById(cert.applicant_id);
+  const learner = await getUserById(cert.learner_id);
+  if (!levelData || !applicant || !learner) return null;
+  const approver = cert.approver_id ? (await getUserById(cert.approver_id)) || null : null;
+  const level = mapCertificationLevel(levelData);
+  return {
+    certification: {
+      id: cert.id, learnerId: cert.learner_id, levelId: cert.level_id,
+      track: cert.track as TrackCode | null, applicantId: cert.applicant_id,
+      approverId: cert.approver_id, status: cert.status,
+      reason: cert.reason, rejectionReason: cert.rejection_reason,
+      appliedAt: cert.applied_at, decidedAt: cert.decided_at,
+      createdAt: cert.created_at, updatedAt: cert.updated_at,
+    },
+    level, applicant, approver, learner,
+  };
 }
 
-export function getCertificationLevels(): CertificationLevel[] {
-  return certificationLevels;
+export async function getCertificationLevels(): Promise<CertificationLevel[]> {
+  const { data } = await supabase.from('certification_levels').select('*').order('sort_order');
+  return (data || []).map(mapCertificationLevel);
 }
 
 // ============================================
 // 統計・ダッシュボード
 // ============================================
 
-export function getDashboardStats() {
-  const allLearners = getLearners();
-  const pendingCerts = certifications.filter(c => c.status === 'pending');
-  const recentEvals = evaluations.filter(e => {
-    const evalDate = new Date(e.evaluatedAt);
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    return evalDate >= thirtyDaysAgo;
-  });
+export async function getDashboardStats() {
+  const { count: totalLearners } = await supabase
+    .from('users').select('*', { count: 'exact', head: true }).eq('role', 'learner');
+  const { count: pendingCertifications } = await supabase
+    .from('certifications').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const { count: recentEvaluations } = await supabase
+    .from('evaluations').select('*', { count: 'exact', head: true })
+    .gte('evaluated_at', thirtyDaysAgo.toISOString());
+
+  const { count: totalCurricula } = await supabase
+    .from('curricula').select('*', { count: 'exact', head: true });
 
   return {
-    totalLearners: allLearners.length,
-    pendingCertifications: pendingCerts.length,
-    recentEvaluations: recentEvals.length,
-    totalCurricula: curricula.length,
+    totalLearners: totalLearners || 0,
+    pendingCertifications: pendingCertifications || 0,
+    recentEvaluations: recentEvaluations || 0,
+    totalCurricula: totalCurricula || 0,
   };
 }
 
 // ============================================
-// データ変更操作（MVPインメモリ）
+// データ変更操作
 // ============================================
 
-export function addEvaluation(
+export async function addEvaluation(
   learnerId: string,
   evaluatorId: string,
   track: TrackCode,
@@ -233,425 +393,339 @@ export function addEvaluation(
   items: { itemName: EvaluationItemName; score: number; comment: string }[],
   goodPoints: string[],
   improvementPoints: string[],
-): Evaluation {
-  const now = new Date().toISOString();
+): Promise<Evaluation> {
   const totalScore = items.reduce((sum, item) => sum + item.score, 0);
   const passed = totalScore >= 61 && ngItemCodes.length === 0;
 
-  const newEval: Evaluation = {
-    id: `eval-${Date.now()}`, learnerId, evaluatorId, track,
-    status: 'submitted', totalScore, passed, ngItems: ngItemCodes,
-    overallComment, goodPoints, improvementPoints,
-    evaluatedAt: now, createdAt: now, updatedAt: now,
-  };
-  evaluations.push(newEval);
+  const { data: newEval, error } = await supabase.from('evaluations').insert({
+    learner_id: learnerId, evaluator_id: evaluatorId, track,
+    status: 'submitted', total_score: totalScore, passed, ng_items: ngItemCodes,
+    overall_comment: overallComment || null, good_points: goodPoints,
+    improvement_points: improvementPoints,
+  }).select().single();
 
-  items.forEach((item, index) => {
-    const newItem: EvaluationItem = {
-      id: `ei-new-${Date.now()}-${index}`, evaluationId: newEval.id,
-      itemName: item.itemName, score: item.score,
-      comment: item.comment || null, createdAt: now,
-    };
-    evaluationItems.push(newItem);
-  });
+  if (error || !newEval) throw new Error('評価の保存に失敗しました');
 
-  return newEval;
+  // 評価項目を一括挿入
+  const itemRows = items.map(item => ({
+    evaluation_id: newEval.id,
+    item_name: item.itemName,
+    score: item.score,
+    comment: item.comment || null,
+  }));
+  await supabase.from('evaluation_items').insert(itemRows);
+
+  return mapEvaluation(newEval);
 }
 
 // ============================================
 // 科目の取得
 // ============================================
 
-export function getAllSubjects() { return subjects; }
+export async function getAllSubjects(): Promise<Subject[]> {
+  const { data } = await supabase.from('subjects').select('*').order('sort_order');
+  return (data || []).map(mapSubject);
+}
 
 // ============================================
-// 受講進捗の更新操作（MVPインメモリ）
+// 受講進捗の更新操作
 // ============================================
 
-import type { ProgressStatus, CourseProgress } from './types';
-
-/** 受講進捗のステータスを更新（存在しなければ新規作成） */
-export function updateProgressStatus(
-  userId: string,
-  subjectId: string,
-  status: ProgressStatus,
-): CourseProgress {
+export async function updateProgressStatus(
+  userId: string, subjectId: string, status: ProgressStatus,
+): Promise<CourseProgress> {
   const now = new Date().toISOString();
-  let progress = courseProgresses.find(p => p.userId === userId && p.subjectId === subjectId);
+  // 既存チェック
+  const { data: existing } = await supabase
+    .from('course_progresses').select('*')
+    .eq('user_id', userId).eq('subject_id', subjectId).single();
 
-  if (progress) {
-    progress.status = status;
-    if (status === 'in_progress' && !progress.startedAt) {
-      progress.startedAt = now;
-    }
+  if (existing) {
+    const updates: Record<string, unknown> = { status, updated_at: now };
+    if (status === 'in_progress' && !existing.started_at) updates.started_at = now;
     if (status === 'completed') {
-      progress.completedAt = now;
-      if (!progress.startedAt) progress.startedAt = now;
+      updates.completed_at = now;
+      if (!existing.started_at) updates.started_at = now;
     }
     if (status === 'not_started') {
-      progress.startedAt = null;
-      progress.completedAt = null;
+      updates.started_at = null;
+      updates.completed_at = null;
     }
-    progress.updatedAt = now;
-    return progress;
+    const { data } = await supabase.from('course_progresses')
+      .update(updates).eq('id', existing.id).select().single();
+    return mapCourseProgress(data);
   }
 
   // 新規作成
-  const newProgress: CourseProgress = {
-    id: `prog-${Date.now()}`,
-    userId,
-    subjectId,
-    status,
-    startedAt: status !== 'not_started' ? now : null,
-    completedAt: status === 'completed' ? now : null,
-    memo: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  courseProgresses.push(newProgress);
-  return newProgress;
+  const { data } = await supabase.from('course_progresses').insert({
+    user_id: userId, subject_id: subjectId, status,
+    started_at: status !== 'not_started' ? now : null,
+    completed_at: status === 'completed' ? now : null,
+  }).select().single();
+  return mapCourseProgress(data);
 }
 
-/** 受講進捗のメモを更新（存在しなければ新規作成） */
-export function updateProgressMemo(
-  userId: string,
-  subjectId: string,
-  memo: string,
-): CourseProgress {
+export async function updateProgressMemo(
+  userId: string, subjectId: string, memo: string,
+): Promise<CourseProgress> {
   const now = new Date().toISOString();
-  let progress = courseProgresses.find(p => p.userId === userId && p.subjectId === subjectId);
+  const { data: existing } = await supabase
+    .from('course_progresses').select('*')
+    .eq('user_id', userId).eq('subject_id', subjectId).single();
 
-  if (progress) {
-    progress.memo = memo || null;
-    progress.updatedAt = now;
-    return progress;
+  if (existing) {
+    const { data } = await supabase.from('course_progresses')
+      .update({ memo: memo || null, updated_at: now }).eq('id', existing.id).select().single();
+    return mapCourseProgress(data);
   }
 
-  // 未着手でメモだけ追加
-  const newProgress: CourseProgress = {
-    id: `prog-${Date.now()}`,
-    userId,
-    subjectId,
-    status: 'not_started',
-    startedAt: null,
-    completedAt: null,
-    memo: memo || null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  courseProgresses.push(newProgress);
-  return newProgress;
+  const { data } = await supabase.from('course_progresses').insert({
+    user_id: userId, subject_id: subjectId, status: 'not_started', memo: memo || null,
+  }).select().single();
+  return mapCourseProgress(data);
 }
 
-/** 受講進捗の日付を更新（存在しなければ新規作成） */
-export function updateProgressDates(
-  userId: string,
-  subjectId: string,
-  startedAt: string | null,
-  completedAt: string | null,
-): CourseProgress {
+export async function updateProgressDates(
+  userId: string, subjectId: string,
+  startedAt: string | null, completedAt: string | null,
+): Promise<CourseProgress> {
   const now = new Date().toISOString();
-  let progress = courseProgresses.find(p => p.userId === userId && p.subjectId === subjectId);
+  const { data: existing } = await supabase
+    .from('course_progresses').select('*')
+    .eq('user_id', userId).eq('subject_id', subjectId).single();
 
-  if (progress) {
-    progress.startedAt = startedAt;
-    progress.completedAt = completedAt;
-    progress.updatedAt = now;
-    return progress;
+  if (existing) {
+    const { data } = await supabase.from('course_progresses')
+      .update({ started_at: startedAt, completed_at: completedAt, updated_at: now })
+      .eq('id', existing.id).select().single();
+    return mapCourseProgress(data);
   }
 
-  // 新規作成
-  const newProgress: CourseProgress = {
-    id: `prog-${Date.now()}`,
-    userId,
-    subjectId,
-    status: completedAt ? 'completed' : startedAt ? 'in_progress' : 'not_started',
-    startedAt,
-    completedAt,
-    memo: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  courseProgresses.push(newProgress);
-  return newProgress;
+  const status = completedAt ? 'completed' : startedAt ? 'in_progress' : 'not_started';
+  const { data } = await supabase.from('course_progresses').insert({
+    user_id: userId, subject_id: subjectId, status,
+    started_at: startedAt, completed_at: completedAt,
+  }).select().single();
+  return mapCourseProgress(data);
 }
 
-/** 科目の時間を更新 */
-export function updateSubjectHours(subjectId: string, hours: number): boolean {
-  const sub = subjects.find(s => s.id === subjectId);
-  if (!sub) return false;
-  sub.hours = hours;
-  sub.updatedAt = new Date().toISOString();
-  return true;
+export async function updateSubjectHours(subjectId: string, hours: number): Promise<boolean> {
+  const { error } = await supabase.from('subjects').update({ hours }).eq('id', subjectId);
+  return !error;
 }
 
 // ============================================
 // 認定の変更操作
 // ============================================
 
-export function addCertification(
-  learnerId: string,
-  levelId: string,
-  applicantId: string,
-  reason: string,
-  track: TrackCode | null,
-): typeof certifications[0] {
+export async function addCertification(
+  learnerId: string, levelId: string, applicantId: string,
+  reason: string, track: TrackCode | null,
+) {
+  const { data, error } = await supabase.from('certifications').insert({
+    learner_id: learnerId, level_id: levelId, track,
+    applicant_id: applicantId, status: 'pending', reason,
+  }).select().single();
+  if (error) throw new Error('認定申請に失敗しました');
+  return data;
+}
+
+/** 認定を承認 */
+export async function approveCertification(certId: string, approverId: string) {
   const now = new Date().toISOString();
-  const newCert = {
-    id: `cert-${Date.now()}`, learnerId, levelId, track,
-    applicantId, approverId: null, status: 'pending' as const,
-    reason, rejectionReason: null,
-    appliedAt: now, decidedAt: null, createdAt: now, updatedAt: now,
-  };
-  certifications.push(newCert);
-  return newCert;
+  // 認定を更新
+  const { data: cert } = await supabase.from('certifications')
+    .update({ status: 'certified', approver_id: approverId, decided_at: now })
+    .eq('id', certId).select().single();
+  if (!cert) return;
+
+  // 研修者のレベルを更新
+  const { data: level } = await supabase
+    .from('certification_levels').select('code').eq('id', cert.level_id).single();
+  if (level) {
+    await supabase.from('users')
+      .update({ current_level: level.code }).eq('id', cert.learner_id);
+  }
 }
 
-// ============================================
-// 受講者の管理操作（MVPインメモリ）
-// ============================================
-
-/** 全組織を取得 */
-export function getAllOrganizations() {
-  return organizations;
-}
-
-/** 店舗一覧を取得 */
-export function getStores() {
-  return organizations.filter(o => o.type === 'store');
-}
-
-/** 新しい受講者を追加 */
-export function addLearner(data: {
-  name: string;
-  email: string;
-  organizationId: string;
-  tracks: TrackCode[];
-  hireDate: string | null;
-}): User {
+/** 認定を差し戻し */
+export async function rejectCertification(certId: string, approverId: string, rejectionReason: string) {
   const now = new Date().toISOString();
-  const newUser: User = {
-    id: `user-${Date.now()}`,
-    email: data.email,
-    name: data.name,
-    role: 'learner',
-    organizationId: data.organizationId,
-    currentLevel: 'lv0',
-    tracks: data.tracks,
-    hireDate: data.hireDate,
-    createdAt: now,
-    updatedAt: now,
-  };
-  users.push(newUser);
-  return newUser;
-}
-
-/** 受講者情報を更新 */
-export function updateLearner(id: string, data: {
-  name: string;
-  email: string;
-  organizationId: string;
-  tracks: TrackCode[];
-  hireDate: string | null;
-}): User | null {
-  const user = users.find(u => u.id === id);
-  if (!user || user.role !== 'learner') return null;
-  user.name = data.name;
-  user.email = data.email;
-  user.organizationId = data.organizationId;
-  user.tracks = data.tracks;
-  user.hireDate = data.hireDate;
-  user.updatedAt = new Date().toISOString();
-  return user;
-}
-
-/** 受講者を削除 */
-export function deleteLearner(id: string): boolean {
-  const index = users.findIndex(u => u.id === id && u.role === 'learner');
-  if (index === -1) return false;
-  users.splice(index, 1);
-  return true;
+  await supabase.from('certifications').update({
+    status: 'rejected', approver_id: approverId,
+    rejection_reason: rejectionReason, decided_at: now,
+  }).eq('id', certId);
 }
 
 // ============================================
-// スタッフ（管理者系ロール）管理操作
+// 受講者の管理操作
 // ============================================
 
-/** スタッフロール一覧 */
+export async function getAllOrganizations(): Promise<Organization[]> {
+  const { data } = await supabase.from('organizations').select('*');
+  return (data || []).map(mapOrganization);
+}
+
+export async function getStores(): Promise<Organization[]> {
+  const { data } = await supabase.from('organizations').select('*').eq('type', 'store');
+  return (data || []).map(mapOrganization);
+}
+
+export async function addLearner(data: {
+  name: string; email: string; organizationId: string;
+  tracks: TrackCode[]; hireDate: string | null;
+}): Promise<User> {
+  const { data: newUser, error } = await supabase.from('users').insert({
+    email: data.email, name: data.name, role: 'learner',
+    organization_id: data.organizationId, current_level: 'lv0',
+    tracks: data.tracks, hire_date: data.hireDate,
+  }).select().single();
+  if (error || !newUser) throw new Error('受講者の登録に失敗しました');
+  return mapUser(newUser);
+}
+
+export async function updateLearner(id: string, data: {
+  name: string; email: string; organizationId: string;
+  tracks: TrackCode[]; hireDate: string | null;
+}): Promise<User | null> {
+  const { data: updated, error } = await supabase.from('users').update({
+    name: data.name, email: data.email,
+    organization_id: data.organizationId,
+    tracks: data.tracks, hire_date: data.hireDate,
+  }).eq('id', id).select().single();
+  if (error || !updated) return null;
+  return mapUser(updated);
+}
+
+export async function deleteLearner(id: string): Promise<boolean> {
+  const { error } = await supabase.from('users').delete().eq('id', id).eq('role', 'learner');
+  return !error;
+}
+
+// ============================================
+// スタッフ管理操作
+// ============================================
+
 const STAFF_ROLES: UserRole[] = ['admin', 'education_manager', 'evaluator', 'store_manager'];
 
-/** スタッフ一覧を取得 */
-export function getStaffList(): User[] {
-  return users.filter(u => STAFF_ROLES.includes(u.role));
+export async function getStaffList(): Promise<User[]> {
+  const { data } = await supabase.from('users').select('*').in('role', STAFF_ROLES);
+  return (data || []).map(mapUser);
 }
 
-/** 新しいスタッフを追加 */
-export function addStaff(data: {
-  name: string;
-  email: string;
-  role: UserRole;
-  organizationId: string;
-  hireDate: string | null;
-}): User {
-  const now = new Date().toISOString();
-  const newUser: User = {
-    id: `user-${Date.now()}`,
-    email: data.email,
-    name: data.name,
-    role: data.role,
-    organizationId: data.organizationId,
-    currentLevel: 'lv0',
-    tracks: [],
-    hireDate: data.hireDate,
-    createdAt: now,
-    updatedAt: now,
-  };
-  users.push(newUser);
-  return newUser;
+export async function addStaff(data: {
+  name: string; email: string; role: UserRole;
+  organizationId: string; hireDate: string | null;
+}): Promise<User> {
+  const { data: newUser, error } = await supabase.from('users').insert({
+    email: data.email, name: data.name, role: data.role,
+    organization_id: data.organizationId, current_level: 'lv0',
+    tracks: [], hire_date: data.hireDate,
+  }).select().single();
+  if (error || !newUser) throw new Error('スタッフの登録に失敗しました');
+  return mapUser(newUser);
 }
 
-/** スタッフを削除 */
-export function deleteStaff(id: string): boolean {
-  const index = users.findIndex(u => u.id === id && STAFF_ROLES.includes(u.role));
-  if (index === -1) return false;
-  users.splice(index, 1);
-  return true;
+export async function deleteStaff(id: string): Promise<boolean> {
+  const { error } = await supabase.from('users').delete().eq('id', id);
+  return !error;
 }
 
-/** スタッフ情報を更新 */
-export function updateStaff(id: string, data: {
-  name: string;
-  email: string;
-  role: UserRole;
-  organizationId: string;
-  hireDate: string | null;
-}): User | null {
-  const user = users.find(u => u.id === id && STAFF_ROLES.includes(u.role));
-  if (!user) return null;
-  user.name = data.name;
-  user.email = data.email;
-  user.role = data.role;
-  user.organizationId = data.organizationId;
-  user.hireDate = data.hireDate;
-  user.updatedAt = new Date().toISOString();
-  return user;
+export async function updateStaff(id: string, data: {
+  name: string; email: string; role: UserRole;
+  organizationId: string; hireDate: string | null;
+}): Promise<User | null> {
+  const { data: updated, error } = await supabase.from('users').update({
+    name: data.name, email: data.email, role: data.role,
+    organization_id: data.organizationId, hire_date: data.hireDate,
+  }).eq('id', id).select().single();
+  if (error || !updated) return null;
+  return mapUser(updated);
 }
 
 // ============================================
 // カリキュラムマスタ管理操作
 // ============================================
 
-import type { Curriculum, Subject } from './types';
-
-/** 全カリキュラム一覧を取得（ソート順） */
-export function getAllCurricula(): Curriculum[] {
-  return [...curricula].sort((a, b) => a.sortOrder - b.sortOrder);
+export async function getAllCurricula(): Promise<Curriculum[]> {
+  const { data } = await supabase.from('curricula').select('*').order('sort_order');
+  return (data || []).map(mapCurriculum);
 }
 
-/** カリキュラムIDでカリキュラムを取得 */
-export function getCurriculumById(id: string): Curriculum | undefined {
-  return curricula.find(c => c.id === id);
+export async function getCurriculumById(id: string): Promise<Curriculum | undefined> {
+  const { data } = await supabase.from('curricula').select('*').eq('id', id).single();
+  return data ? mapCurriculum(data) : undefined;
 }
 
-/** カリキュラムに紐づく科目一覧を取得（ソート順） */
-export function getSubjectsByCurriculum(curriculumId: string): Subject[] {
-  return subjects.filter(s => s.curriculumId === curriculumId).sort((a, b) => a.sortOrder - b.sortOrder);
+export async function getSubjectsByCurriculum(curriculumId: string): Promise<Subject[]> {
+  const { data } = await supabase.from('subjects').select('*')
+    .eq('curriculum_id', curriculumId).order('sort_order');
+  return (data || []).map(mapSubject);
 }
 
-/** カリキュラムを更新 */
-export function updateCurriculum(id: string, data: {
-  name: string;
-  description: string | null;
+export async function updateCurriculum(id: string, data: {
+  name: string; description: string | null;
   type: 'common' | 'track' | 'brushup';
-  trackCode: TrackCode | null;
-  totalHours: number;
-  isActive: boolean;
-}): Curriculum | null {
-  const cur = curricula.find(c => c.id === id);
-  if (!cur) return null;
-  cur.name = data.name;
-  cur.description = data.description;
-  cur.type = data.type;
-  cur.trackCode = data.trackCode;
-  cur.totalHours = data.totalHours;
-  cur.isActive = data.isActive;
-  cur.updatedAt = new Date().toISOString();
-  return cur;
+  trackCode: TrackCode | null; totalHours: number; isActive: boolean;
+}): Promise<Curriculum | null> {
+  const { data: updated, error } = await supabase.from('curricula').update({
+    name: data.name, description: data.description, type: data.type,
+    track_code: data.trackCode, total_hours: data.totalHours, is_active: data.isActive,
+  }).eq('id', id).select().single();
+  if (error || !updated) return null;
+  return mapCurriculum(updated);
 }
 
-/** 新しいカリキュラムを追加 */
-export function addCurriculum(data: {
-  name: string;
-  description: string | null;
+export async function addCurriculum(data: {
+  name: string; description: string | null;
   type: 'common' | 'track' | 'brushup';
-  trackCode: TrackCode | null;
-  totalHours: number;
-}): Curriculum {
-  const now = new Date().toISOString();
-  const maxOrder = curricula.reduce((max, c) => Math.max(max, c.sortOrder), 0);
-  const newCur: Curriculum = {
-    id: `cur-${Date.now()}`,
-    name: data.name,
-    description: data.description,
-    type: data.type,
-    trackCode: data.trackCode,
-    totalHours: data.totalHours,
-    sortOrder: maxOrder + 1,
-    isActive: true,
-    createdAt: now,
-    updatedAt: now,
-  };
-  curricula.push(newCur);
-  return newCur;
+  trackCode: TrackCode | null; totalHours: number;
+}): Promise<Curriculum> {
+  // 最大sort_orderを取得
+  const { data: maxRow } = await supabase.from('curricula')
+    .select('sort_order').order('sort_order', { ascending: false }).limit(1).single();
+  const maxOrder = maxRow?.sort_order || 0;
+
+  const { data: newCur, error } = await supabase.from('curricula').insert({
+    name: data.name, description: data.description, type: data.type,
+    track_code: data.trackCode, total_hours: data.totalHours,
+    sort_order: maxOrder + 1, is_active: true,
+  }).select().single();
+  if (error || !newCur) throw new Error('カリキュラムの追加に失敗しました');
+  return mapCurriculum(newCur);
 }
 
-/** 科目を追加 */
-export function addSubject(data: {
-  curriculumId: string;
-  name: string;
-  description: string | null;
-  hours: number;
-}): Subject {
-  const now = new Date().toISOString();
-  const curSubjects = subjects.filter(s => s.curriculumId === data.curriculumId);
-  const maxOrder = curSubjects.reduce((max, s) => Math.max(max, s.sortOrder), 0);
-  const newSubject: Subject = {
-    id: `sub-${Date.now()}`,
-    curriculumId: data.curriculumId,
-    name: data.name,
-    description: data.description,
-    hours: data.hours,
-    sortOrder: maxOrder + 1,
-    isActive: true,
-    createdAt: now,
-    updatedAt: now,
-  };
-  subjects.push(newSubject);
-  return newSubject;
+export async function addSubject(data: {
+  curriculumId: string; name: string;
+  description: string | null; hours: number;
+}): Promise<Subject> {
+  const { data: maxRow } = await supabase.from('subjects')
+    .select('sort_order').eq('curriculum_id', data.curriculumId)
+    .order('sort_order', { ascending: false }).limit(1).single();
+  const maxOrder = maxRow?.sort_order || 0;
+
+  const { data: newSub, error } = await supabase.from('subjects').insert({
+    curriculum_id: data.curriculumId, name: data.name,
+    description: data.description, hours: data.hours,
+    sort_order: maxOrder + 1, is_active: true,
+  }).select().single();
+  if (error || !newSub) throw new Error('科目の追加に失敗しました');
+  return mapSubject(newSub);
 }
 
-/** 科目を更新 */
-export function updateSubject(id: string, data: {
-  name: string;
-  description: string | null;
-  hours: number;
-  isActive: boolean;
-}): Subject | null {
-  const sub = subjects.find(s => s.id === id);
-  if (!sub) return null;
-  sub.name = data.name;
-  sub.description = data.description;
-  sub.hours = data.hours;
-  sub.isActive = data.isActive;
-  sub.updatedAt = new Date().toISOString();
-  return sub;
+export async function updateSubject(id: string, data: {
+  name: string; description: string | null;
+  hours: number; isActive: boolean;
+}): Promise<Subject | null> {
+  const { data: updated, error } = await supabase.from('subjects').update({
+    name: data.name, description: data.description,
+    hours: data.hours, is_active: data.isActive,
+  }).eq('id', id).select().single();
+  if (error || !updated) return null;
+  return mapSubject(updated);
 }
 
-/** 科目を削除 */
-export function deleteSubject(id: string): boolean {
-  const index = subjects.findIndex(s => s.id === id);
-  if (index === -1) return false;
-  subjects.splice(index, 1);
-  return true;
+export async function deleteSubject(id: string): Promise<boolean> {
+  const { error } = await supabase.from('subjects').delete().eq('id', id);
+  return !error;
 }
-
