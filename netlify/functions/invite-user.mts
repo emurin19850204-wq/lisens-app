@@ -119,9 +119,11 @@ export default async (req: Request) => {
       );
     }
 
-    // Supabase Auth に招待メールを送信
+    // Supabase Auth に招待メールを送信（パスワード設定ページにリダイレクト）
+    const siteUrl = process.env.SITE_URL || 'https://element-lisense.netlify.app';
     const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
       data: { name, role },
+      redirectTo: `${siteUrl}/auth/callback`,
     });
 
     if (inviteError) {
