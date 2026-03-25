@@ -51,7 +51,7 @@ export default function StaffListPage() {
     <div className="page-container">
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
         <div><h1 className="page-title">🛡️ スタッフ管理</h1><span className="text-secondary text-sm">{staffList.length}名</span></div>
-        <Link href="/admin/staff/new" className="btn btn-primary">➕ スタッフ登録</Link>
+        <Link href="/admin/staff/new" className="btn btn-primary">✉️ ユーザー招待</Link>
       </div>
       <div className="card"><div className="card-body" style={{ padding: 0 }}><div className="table-container"><table>
         <thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>所属</th><th>レベル</th><th>入社日</th><th>操作</th></tr></thead>
