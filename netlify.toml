@@ -5,12 +5,23 @@
   command = "npm run build"
   publish = "out"
 
+# Netlify Functions設定
+[functions]
+  directory = "netlify/functions"
+
 # Next.jsプラグインを無効化（静的エクスポートでは不要）
 [build.environment]
   NETLIFY_NEXT_PLUGIN_SKIP = "true"
+
+# API呼び出しをNetlify Functionsにルーティング
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
 
 # 静的アセットのキャッシュ設定
 [[headers]]
   for = "/_next/static/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
