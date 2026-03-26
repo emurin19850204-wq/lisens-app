@@ -146,15 +146,6 @@ export default async (req: Request) => {
       );
     }
 
-    // Resend APIで招待メールを送信（Supabaseのメールレート制限をバイパス）
-    const resendApiKey = process.env.RESEND_API_KEY;
-    if (!resendApiKey) {
-      return new Response(
-        JSON.stringify({ error: 'サーバー設定エラー: RESEND_API_KEYが設定されていません' }),
-        { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
-      );
-    }
-
     // 招待リンクを取得
     const inviteLink = linkData.properties?.action_link;
     if (!inviteLink) {
@@ -164,37 +155,54 @@ export default async (req: Request) => {
       );
     }
 
-    // Resend APIでメール送信
-    const emailHtml = `
-      <h2>ELEMENT LISENS へようこそ</h2>
-      <p>${name}さん、こんにちは。</p>
-      <p>あなたはELEMENT LISENSに招待されました。</p>
-      <p>以下のリンクをクリックして、パスワードを設定してください。</p>
-      <p><a href="${inviteLink}" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:8px;font-weight:bold;">パスワードを設定する</a></p>
-      <p style="color:#94a3b8;font-size:12px;margin-top:24px;">このメールに心当たりがない場合は無視してください。</p>
-    `;
+    // メール送信を試行（失敗しても招待自体は成功とする）
+    let emailSent = false;
+    let emailError = '';
+    const resendApiKey = process.env.RESEND_API_KEY;
+    // 送信元メールアドレス（環境変数で上書き可能、デフォルトはResendテスト用）
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'ELEMENT LISENS <onboarding@resend.dev>';
 
-    const resendResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'ELEMENT LISENS <onboarding@resend.dev>',
-        to: [email],
-        subject: '【ELEMENT LISENS】アカウント登録のお知らせ',
-        html: emailHtml,
-      }),
-    });
+    if (resendApiKey) {
+      try {
+        const emailHtml = `
+          <h2>ELEMENT LISENS へようこそ</h2>
+          <p>${name}さん、こんにちは。</p>
+          <p>あなたはELEMENT LISENSに招待されました。</p>
+          <p>以下のリンクをクリックして、パスワードを設定してください。</p>
+          <p><a href="${inviteLink}" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:8px;font-weight:bold;">パスワードを設定する</a></p>
+          <p style="color:#94a3b8;font-size:12px;margin-top:24px;">このメールに心当たりがない場合は無視してください。</p>
+        `;
 
-    if (!resendResponse.ok) {
-      const resendError = await resendResponse.text();
-      console.error('Resendメール送信エラー:', resendError);
-      return new Response(
-        JSON.stringify({ error: `メール送信に失敗しました: ${resendError}` }),
-        { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
-      );
+        const resendResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: fromEmail,
+            to: [email],
+            subject: '【ELEMENT LISENS】アカウント登録のお知らせ',
+            html: emailHtml,
+          }),
+        });
+        emailSent = resendResponse.ok;
+        if (!resendResponse.ok) {
+          const errorBody = await resendResponse.text();
+          console.warn('メール送信スキップ:', errorBody);
+          // ドメイン未認証エラーの場合は分かりやすいメッセージを設定
+          if (errorBody.includes('verify a domain') || errorBody.includes('validation_error')) {
+            emailError = 'Resendのドメイン未認証のためメール送信をスキップしました。招待リンクを直接共有してください。';
+          } else {
+            emailError = 'メール送信に失敗しました。招待リンクを直接共有してください。';
+          }
+        }
+      } catch (emailErr) {
+        console.warn('メール送信エラー（無視）:', emailErr);
+        emailError = 'メール送信中にエラーが発生しました。招待リンクを直接共有してください。';
+      }
+    } else {
+      emailError = 'メール設定がありません。招待リンクを直接共有してください。';
     }
 
     // usersテーブルにレコードを作成（auth_uidを紐付け）
@@ -219,13 +227,18 @@ export default async (req: Request) => {
       );
     }
 
-    // 成功レスポンス
+    // 成功レスポンス（招待リンクを常に含む）
     return new Response(
       JSON.stringify({
         success: true,
-        message: `${name}さんに招待メールを送信しました`,
+        message: emailSent
+          ? `✅ ${name}さんに招待メールを送信しました`
+          : `✅ ${name}さんのアカウントを作成しました`,
+        emailNote: emailError || null,
         userId,
         authUid: linkData.user?.id,
+        inviteLink,
+        emailSent,
       }),
       {
         status: 200,

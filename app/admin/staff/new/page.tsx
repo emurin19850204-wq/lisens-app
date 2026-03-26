@@ -33,7 +33,7 @@ export default function NewStaffPage() {
   const [hireDate, setHireDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [result, setResult] = useState<{ success: boolean; message: string; inviteLink?: string; emailNote?: string } | null>(null);
 
   useEffect(() => { getAllOrganizations().then(setAllOrgs); }, []);
 
@@ -88,7 +88,12 @@ export default function NewStaffPage() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        setResult({ success: true, message: data.message });
+        setResult({
+          success: true,
+          message: data.message,
+          inviteLink: data.inviteLink,
+          emailNote: data.emailNote || null,
+        });
         // フォームをリセット
         setName('');
         setEmail('');
@@ -111,7 +116,7 @@ export default function NewStaffPage() {
       <nav className="breadcrumb"><Link href="/">ホーム</Link><span className="breadcrumb-separator">/</span><Link href="/admin/staff">スタッフ管理</Link><span className="breadcrumb-separator">/</span><span>新規招待</span></nav>
       <h1 className="page-title">✉️ ユーザー招待</h1>
       <p className="text-secondary" style={{ marginBottom: 'var(--space-lg)' }}>
-        メールアドレスに招待リンクが送信されます。招待された人はリンクからパスワードを設定してログインできます。
+        アカウントを作成し、招待リンクを発行します。リンクからパスワードを設定してログインできます。
       </p>
 
       {/* 結果表示 */}
@@ -121,13 +126,29 @@ export default function NewStaffPage() {
           borderColor: result.success ? 'var(--color-success)' : 'var(--color-danger)',
           background: result.success ? 'rgba(34, 197, 94, 0.05)' : 'rgba(239, 68, 68, 0.05)',
         }}>
-          <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+          <div className="card-body" style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-sm)' }}>
             <span style={{ fontSize: '1.5rem' }}>{result.success ? '✅' : '❌'}</span>
-            <div>
+            <div style={{ flex: 1 }}>
               <div className="font-semibold">{result.success ? '招待完了' : 'エラー'}</div>
               <div className="text-sm text-secondary">{result.message}</div>
+              {/* メール送信できなかった場合の注意書き */}
+              {result.success && result.emailNote && (
+                <div className="text-sm" style={{ marginTop: 'var(--space-xs)', padding: '6px 10px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '6px', color: 'var(--color-warning, #f59e0b)' }}>
+                  ⚠️ {result.emailNote}
+                </div>
+              )}
+              {/* 招待リンク表示（常に目立たせる） */}
+              {result.success && result.inviteLink && (
+                <div style={{ marginTop: 'var(--space-sm)', padding: 'var(--space-sm) var(--space-md)', background: 'var(--color-bg, #0f172a)', borderRadius: '8px', border: '2px solid var(--color-primary, #6366f1)' }}>
+                  <div className="text-sm font-semibold" style={{ marginBottom: '6px' }}>🔗 招待リンク — このリンクを招待者に共有してください:</div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input type="text" readOnly value={result.inviteLink} className="form-input" style={{ flex: 1, fontSize: '0.75rem', margin: 0 }} onClick={e => (e.target as HTMLInputElement).select()} />
+                    <button type="button" className="btn btn-primary" style={{ whiteSpace: 'nowrap', padding: '6px 16px', fontSize: '0.8rem' }} onClick={() => { navigator.clipboard.writeText(result.inviteLink!); alert('クリップボードにコピーしました！'); }}>📋 コピー</button>
+                  </div>
+                </div>
+              )}
               {result.success && (
-                <div className="text-sm" style={{ marginTop: 'var(--space-xs)', color: 'var(--color-success)' }}>
+                <div className="text-sm" style={{ marginTop: 'var(--space-sm)', color: 'var(--color-success)' }}>
                   続けて別のユーザーを招待するか、<Link href="/admin/staff" style={{ textDecoration: 'underline' }}>スタッフ一覧に戻る</Link>ことができます。
                 </div>
               )}
