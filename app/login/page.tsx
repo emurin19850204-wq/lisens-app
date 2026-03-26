@@ -8,6 +8,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import styles from './login.module.css';
 
@@ -76,6 +77,11 @@ export default function LoginPage() {
           <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%' }} disabled={isSubmitting}>
             {isSubmitting ? 'ログイン中...' : 'ログイン'}
           </button>
+          <div style={{ textAlign: 'center', marginTop: '12px' }}>
+            <Link href="/auth/reset-password" style={{ color: '#94a3b8', fontSize: '0.85rem', textDecoration: 'underline' }}>
+              パスワードをお忘れですか？
+            </Link>
+          </div>
         </form>
       </div>
     </div>
