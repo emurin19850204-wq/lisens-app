@@ -32,13 +32,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   // ログインページかどうか（末尾スラッシュも考慮）
   const isLoginPage = pathname === '/login' || pathname === '/login/';
+  // 認証コールバックページ（招待リンクからのパスワード設定）
+  const isAuthCallback = pathname === '/auth/callback' || pathname === '/auth/callback/';
 
-  // 未認証ユーザーをログイン画面にリダイレクト
+  // 未認証ユーザーをログイン画面にリダイレクト（ログイン画面と認証コールバックは除外）
   useEffect(() => {
-    if (mounted && !isLoading && !user && !isLoginPage) {
+    if (mounted && !isLoading && !user && !isLoginPage && !isAuthCallback) {
       router.push('/login/');
     }
-  }, [user, isLoading, isLoginPage, router, mounted]);
+  }, [user, isLoading, isLoginPage, isAuthCallback, router, mounted]);
 
   // マウント前またはローディング中はローディング表示
   if (!mounted || isLoading) {
@@ -49,8 +51,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  // ログイン画面はサイドバーなし
-  if (isLoginPage) {
+  // ログイン画面・認証コールバックはサイドバーなし
+  if (isLoginPage || isAuthCallback) {
     return <>{children}</>;
   }
 
