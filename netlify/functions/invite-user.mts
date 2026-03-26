@@ -105,7 +105,7 @@ export default async (req: Request) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // メール重複チェック
+    // メール重複チェック（usersテーブル）
     const { data: existingUser } = await adminClient
       .from('users')
       .select('id')
@@ -119,17 +119,80 @@ export default async (req: Request) => {
       );
     }
 
-    // Supabase Auth に招待メールを送信（パスワード設定ページにリダイレクト）
+    // Auth重複チェック（auth.usersテーブル）
+    const { data: existingAuthUsers } = await adminClient.auth.admin.listUsers();
+    const existingAuthUser = existingAuthUsers?.users?.find(u => u.email === email);
+    if (existingAuthUser) {
+      // 既にAuthに存在する場合は削除して再作成
+      await adminClient.auth.admin.deleteUser(existingAuthUser.id);
+    }
+
+    // generateLinkでトークン付きリンクを生成（メール送信なし → レート制限なし）
     const siteUrl = process.env.SITE_URL || 'https://element-lisense.netlify.app';
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-      data: { name, role },
-      redirectTo: `${siteUrl}/auth/callback`,
+    const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+      type: 'invite',
+      email,
+      options: {
+        data: { name, role },
+        redirectTo: `${siteUrl}/auth/callback`,
+      },
     });
 
-    if (inviteError) {
-      console.error('招待メール送信エラー:', inviteError);
+    if (linkError) {
+      console.error('招待リンク生成エラー:', linkError);
       return new Response(
-        JSON.stringify({ error: `招待メールの送信に失敗しました: ${inviteError.message}` }),
+        JSON.stringify({ error: `招待リンクの生成に失敗しました: ${linkError.message}` }),
+        { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
+
+    // Resend APIで招待メールを送信（Supabaseのメールレート制限をバイパス）
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+      return new Response(
+        JSON.stringify({ error: 'サーバー設定エラー: RESEND_API_KEYが設定されていません' }),
+        { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
+
+    // 招待リンクを取得
+    const inviteLink = linkData.properties?.action_link;
+    if (!inviteLink) {
+      return new Response(
+        JSON.stringify({ error: '招待リンクの生成に失敗しました' }),
+        { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
+
+    // Resend APIでメール送信
+    const emailHtml = `
+      <h2>ELEMENT LISENS へようこそ</h2>
+      <p>${name}さん、こんにちは。</p>
+      <p>あなたはELEMENT LISENSに招待されました。</p>
+      <p>以下のリンクをクリックして、パスワードを設定してください。</p>
+      <p><a href="${inviteLink}" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:8px;font-weight:bold;">パスワードを設定する</a></p>
+      <p style="color:#94a3b8;font-size:12px;margin-top:24px;">このメールに心当たりがない場合は無視してください。</p>
+    `;
+
+    const resendResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'ELEMENT LISENS <onboarding@resend.dev>',
+        to: [email],
+        subject: '【ELEMENT LISENS】アカウント登録のお知らせ',
+        html: emailHtml,
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const resendError = await resendResponse.text();
+      console.error('Resendメール送信エラー:', resendError);
+      return new Response(
+        JSON.stringify({ error: `メール送信に失敗しました: ${resendError}` }),
         { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       );
     }
@@ -145,7 +208,7 @@ export default async (req: Request) => {
       current_level: role === 'learner' ? 'lv1' : 'lv5',
       tracks: Array.isArray(tracks) ? tracks : [],
       hire_date: hireDate || null,
-      auth_uid: inviteData.user?.id || null,
+      auth_uid: linkData.user?.id || null,
     });
 
     if (insertError) {
@@ -162,7 +225,7 @@ export default async (req: Request) => {
         success: true,
         message: `${name}さんに招待メールを送信しました`,
         userId,
-        authUid: inviteData.user?.id,
+        authUid: linkData.user?.id,
       }),
       {
         status: 200,
