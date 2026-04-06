@@ -20,6 +20,7 @@ const STATIC_NAV_ITEMS: Record<string, { label: string; path: string; icon: stri
   certifications: { label: '認定一覧', path: '/certifications', icon: '🏆' },
   curriculum: { label: 'カリキュラム', path: '/admin/curriculum', icon: '📚' },
   staff: { label: 'スタッフ管理', path: '/admin/staff', icon: '🛡️' },
+  reports: { label: 'レポート', path: '/admin/reports', icon: '📊' },
 };
 
 export default function Sidebar() {

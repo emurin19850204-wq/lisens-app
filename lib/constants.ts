@@ -32,10 +32,10 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 
 /** 各ロールがアクセスできるナビゲーション項目 */
 export const ROLE_NAV_ACCESS: Record<UserRole, string[]> = {
-  admin: ['home', 'learners', 'certifications', 'curriculum', 'staff'],
-  education_manager: ['home', 'learners', 'certifications', 'curriculum'],
-  evaluator: ['home', 'learners', 'certifications'],
-  store_manager: ['home', 'learners', 'certifications'],
+  admin: ['home', 'learners', 'certifications', 'curriculum', 'staff', 'reports'],
+  education_manager: ['home', 'learners', 'certifications', 'curriculum', 'reports'],
+  evaluator: ['home', 'learners', 'certifications', 'reports'],
+  store_manager: ['home', 'learners', 'certifications', 'reports'],
   learner: ['home', 'my_chart', 'certifications'],
 };
 

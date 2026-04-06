@@ -1,0 +1,16 @@
+{
+  "account": {
+    "Name": "ATSUSHI EMURA",
+    "Email": "emurin19850204@gmail.com",
+    "Teams": [
+      "emurin19850204’s team"
+    ]
+  },
+  "siteData": {
+    "site-name": "lisens-app",
+    "config-path": "C:\\Users\\emuri\\OneDrive\\Desktop\\lisens\\netlify.toml",
+    "admin-url": "https://app.netlify.com/projects/lisens-app",
+    "site-url": "https://lisens-app.netlify.app",
+    "site-id": "f38878cb-55fa-4629-af6e-c469f4802c40"
+  }
+}
