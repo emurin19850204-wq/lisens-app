@@ -1,37 +1,61 @@
-/* サイドバーのスタイル */
+/* ============================================
+ * LISENS - サイドバー v2.0
+ * プレミアムダークナビゲーション
+ * ============================================ */
+
 .sidebar {
   width: var(--sidebar-width);
   height: 100vh;
   position: fixed;
   top: 0;
   left: 0;
-  background: var(--color-bg-sidebar);
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
   display: flex;
   flex-direction: column;
   z-index: 100;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  /* 装飾的背景パターン */
+  background-image:
+    radial-gradient(ellipse at 20% 0%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+    linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
 }
 
+/* ロゴエリア */
 .logo {
-  padding: var(--space-lg);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: var(--space-lg) var(--space-lg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  position: relative;
 }
 
 .logoLink {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 10px;
+  text-decoration: none;
+  transition: opacity var(--transition-fast);
+}
+
+.logoLink:hover {
+  opacity: 0.85;
   text-decoration: none;
 }
 
 .logoIcon {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
+  filter: drop-shadow(0 2px 4px rgba(99, 102, 241, 0.3));
 }
 
 .logoText {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--color-text-sidebar-active);
-  letter-spacing: 0.1em;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.15em;
+  background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 /* ナビゲーション */
@@ -41,81 +65,130 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow-y: auto;
 }
 
 .navItem {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--border-radius-sm);
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
   color: var(--color-text-sidebar);
   text-decoration: none;
   font-size: 0.875rem;
   font-weight: 500;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-base);
+  position: relative;
 }
 
 .navItem:hover {
-  background: var(--color-bg-sidebar-hover);
-  color: var(--color-text-sidebar-active);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
   text-decoration: none;
+  transform: translateX(2px);
 }
 
+/* アクティブ状態 - グラデーションインジケーター */
 .navItemActive {
-  background: var(--color-primary);
-  color: var(--color-text-sidebar-active);
+  background: rgba(99, 102, 241, 0.15);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.navItemActive::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 24px;
+  background: linear-gradient(180deg, #6366f1, #8b5cf6);
+  border-radius: 0 4px 4px 0;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
 }
 
 .navItemActive:hover {
-  background: var(--color-primary-hover);
+  background: rgba(99, 102, 241, 0.2);
 }
 
 .navIcon {
-  font-size: 1rem;
-  width: 20px;
+  font-size: 1.1rem;
+  width: 24px;
   text-align: center;
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.navItem:hover .navIcon {
+  transform: scale(1.1);
 }
 
 .navLabel {
   white-space: nowrap;
+  font-size: 0.85rem;
+}
+
+/* セクション区切り */
+.navSection {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.25);
+  font-weight: 600;
+  margin-top: var(--space-sm);
 }
 
 /* ユーザー情報 */
 .userSection {
   padding: var(--space-md);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.15);
 }
 
 .userInfo {
   margin-bottom: var(--space-sm);
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
 }
 
 .userName {
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--color-text-sidebar-active);
+  color: #ffffff;
+  line-height: 1.4;
 }
 
 .userRole {
-  font-size: 0.75rem;
-  color: var(--color-text-sidebar);
+  font-size: 0.7rem;
+  color: rgba(99, 102, 241, 0.8);
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .logoutBtn {
   width: 100%;
-  padding: var(--space-sm);
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: var(--border-radius-sm);
-  color: var(--color-text-sidebar);
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.45);
   font-size: 0.75rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-base);
   font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .logoutBtn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--color-text-sidebar-active);
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
 }

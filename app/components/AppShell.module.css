@@ -1,4 +1,7 @@
-/* アプリシェルのスタイル */
+/* ============================================
+ * LISENS - アプリシェル v2.0
+ * ============================================ */
+
 .appShell {
   display: flex;
   min-height: 100vh;
@@ -8,22 +11,56 @@
   margin-left: var(--sidebar-width);
   flex: 1;
   min-height: 100vh;
+  background: var(--color-bg);
+  /* 微妙なテクスチャ */
+  background-image:
+    radial-gradient(ellipse at 50% 0%, rgba(99, 102, 241, 0.03) 0%, transparent 50%);
 }
 
+/* ローディング画面 */
 .loading {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100vh;
-  font-size: 1rem;
-  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  background-image:
+    radial-gradient(ellipse at 50% 50%, rgba(99, 102, 241, 0.04) 0%, transparent 60%);
 }
 
 .loadingSpinner {
-  animation: pulse 1.5s ease-in-out infinite;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  animation: fadeIn 0.5s ease-out;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+.loadingSpinner::before {
+  content: '';
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.loadingSpinner {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* レスポンシブ */
+@media (max-width: 768px) {
+  .mainContent {
+    margin-left: 0;
+  }
 }

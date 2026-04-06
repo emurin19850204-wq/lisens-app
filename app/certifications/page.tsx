@@ -24,7 +24,19 @@ export default function CertificationsPage() {
   }, [user]);
 
   if (!user) return null;
-  if (loading) return <div className="page-container"><div style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}><p className="text-secondary">読み込み中...</p></div></div>;
+  if (loading) {
+    return (
+      <div className="page-container">
+        <div style={{ marginBottom: 'var(--space-xl)' }}>
+          <div className="skeleton" style={{ width: 220, height: 28, marginBottom: 8 }} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 'var(--space-lg)' }}>
+          {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{ width: 90, height: 32, borderRadius: 8 }} />)}
+        </div>
+        <div className="skeleton" style={{ height: 350, borderRadius: 'var(--border-radius)' }} />
+      </div>
+    );
+  }
 
   const roleScopedCerts = user.role === 'learner'
     ? allCerts.filter(c => c.certification.learnerId === user.id)
@@ -37,7 +49,12 @@ export default function CertificationsPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header"><h1 className="page-title">🏆 レベル認定一覧</h1></div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">🏆 レベル認定一覧</h1>
+          <p className="text-secondary text-sm" style={{ marginTop: 4 }}>{roleScopedCerts.length}件の認定</p>
+        </div>
+      </div>
       <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
         {(['all', 'pending', 'certified', 'rejected'] as FilterStatus[]).map(status => (
           <button key={status} className={`btn ${filter === status ? 'btn-primary' : 'btn-outline'} btn-sm`} onClick={() => setFilter(status)}>
@@ -46,11 +63,11 @@ export default function CertificationsPage() {
           </button>
         ))}
       </div>
-      <div className="card"><div className="card-body" style={{ padding: 0 }}><div className="table-container"><table>
+      <div className="card animate-fadeInUp"><div style={{ padding: 0 }}><div className="table-container"><table>
         <thead><tr><th>研修者</th><th>認定レベル</th><th>ステータス</th><th>申請者</th><th>申請日</th><th>操作</th></tr></thead>
         <tbody>
-          {filteredCerts.map(c => (
-            <tr key={c.certification.id}>
+          {filteredCerts.map((c, idx) => (
+            <tr key={c.certification.id} className="animate-fadeIn" style={{ animationDelay: `${idx * 0.03}s` }}>
               <td><Link href={`/learners/${c.learner.id}`} style={{ fontWeight: 600 }}>{c.learner.name}</Link></td>
               <td><span className={`badge ${LEVEL_BADGE_CLASS[c.level.code]}`}>{c.level.name}</span></td>
               <td><span className={`badge ${CERTIFICATION_STATUS_BADGE_CLASS[c.certification.status]}`}>{CERTIFICATION_STATUS_LABELS[c.certification.status]}</span></td>

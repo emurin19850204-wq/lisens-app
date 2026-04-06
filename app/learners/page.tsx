@@ -48,15 +48,24 @@ export default function LearnersPage() {
   };
 
   if (loading) {
-    return <div className="page-container"><div style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}><p className="text-secondary">読み込み中...</p></div></div>;
+    return (
+      <div className="page-container">
+        <div style={{ marginBottom: 'var(--space-xl)' }}>
+          <div className="skeleton" style={{ width: 200, height: 28, marginBottom: 8 }} />
+          <div className="skeleton" style={{ width: 100, height: 16 }} />
+        </div>
+        <div className="skeleton" style={{ height: 60, borderRadius: 'var(--border-radius)', marginBottom: 12 }} />
+        <div className="skeleton" style={{ height: 400, borderRadius: 'var(--border-radius)' }} />
+      </div>
+    );
   }
 
   return (
     <div className="page-container">
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
+      <div className="page-header">
         <div>
           <h1 className="page-title">👥 研修者一覧</h1>
-          <span className="text-secondary text-sm">{summaries.length}名</span>
+          <p className="text-secondary text-sm" style={{ marginTop: 4 }}>{summaries.length}名の研修者</p>
         </div>
         {canManage && (
           <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
@@ -83,8 +92,8 @@ export default function LearnersPage() {
       </div>
 
       {/* テーブル */}
-      <div className="card">
-        <div className="card-body" style={{ padding: 0 }}>
+      <div className="card animate-fadeInUp">
+        <div style={{ padding: 0 }}>
           <div className="table-container">
             <table>
               <thead>
@@ -93,8 +102,8 @@ export default function LearnersPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredSummaries.map(s => (
-                  <tr key={s.user.id}>
+                {filteredSummaries.map((s, idx) => (
+                  <tr key={s.user.id} className="animate-fadeIn" style={{ animationDelay: `${idx * 0.03}s` }}>
                     <td><Link href={`/learners/${s.user.id}`} style={{ fontWeight: 600 }}>{s.user.name}</Link></td>
                     <td>{s.organization.name}</td>
                     <td><span className={`badge ${LEVEL_BADGE_CLASS[s.user.currentLevel]}`}>{s.currentLevelName}</span></td>
@@ -119,7 +128,7 @@ export default function LearnersPage() {
                       <div style={{ display: 'flex', gap: '4px' }}>
                         <Link href={`/learners/${s.user.id}`} className="btn btn-outline btn-sm">カルテ</Link>
                         {canManage && (
-                          <button className="btn btn-sm" style={{ color: 'var(--color-danger)', border: '1px solid var(--color-danger)', background: 'transparent', cursor: 'pointer' }} onClick={() => handleDelete(s.user.id, s.user.name)}>🗑</button>
+                          <button className="btn btn-sm btn-ghost" style={{ color: 'var(--color-danger)' }} onClick={() => handleDelete(s.user.id, s.user.name)} title="削除">🗑</button>
                         )}
                       </div>
                     </td>

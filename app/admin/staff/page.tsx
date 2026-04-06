@@ -1,5 +1,6 @@
 /**
- * LISENS - スタッフ（管理者）一覧画面（Supabase対応）
+ * LISENS - スタッフ（管理者）一覧画面 v2.0
+ * プレミアムテーブルデザイン
  */
 'use client';
 
@@ -37,9 +38,28 @@ export default function StaffListPage() {
 
   if (!user) return null;
   if (user.role !== 'admin') {
-    return (<div className="page-container"><div className="empty-state"><div className="empty-state-icon">🔒</div><p>この画面にアクセスする権限がありません</p><Link href="/" className="btn btn-outline" style={{ marginTop: 'var(--space-md)' }}>← ホームに戻る</Link></div></div>);
+    return (
+      <div className="page-container">
+        <div className="empty-state">
+          <div className="empty-state-icon">🔒</div>
+          <p>この画面にアクセスする権限がありません</p>
+          <Link href="/" className="btn btn-outline" style={{ marginTop: 'var(--space-md)' }}>← ホームに戻る</Link>
+        </div>
+      </div>
+    );
   }
-  if (loading) return <div className="page-container"><div style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}><p className="text-secondary">読み込み中...</p></div></div>;
+
+  if (loading) {
+    return (
+      <div className="page-container">
+        <div style={{ marginBottom: 'var(--space-xl)' }}>
+          <div className="skeleton" style={{ width: 220, height: 28, marginBottom: 8 }} />
+          <div className="skeleton" style={{ width: 120, height: 16 }} />
+        </div>
+        <div className="skeleton" style={{ height: 400, borderRadius: 'var(--border-radius)' }} />
+      </div>
+    );
+  }
 
   const handleDelete = async (id: string, name: string) => {
     if (id === user.id) { alert('自分自身を削除することはできません。'); return; }
@@ -69,34 +89,86 @@ export default function StaffListPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
-        <div><h1 className="page-title">🛡️ スタッフ管理</h1><span className="text-secondary text-sm">{staffList.length}名</span></div>
-        <Link href="/admin/staff/new" className="btn btn-primary">✉️ ユーザー招待</Link>
+      {/* ヘッダー */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">🛡️ スタッフ管理</h1>
+          <p className="text-secondary text-sm" style={{ marginTop: 4 }}>
+            {staffList.length}名のスタッフ
+          </p>
+        </div>
+        <Link href="/admin/staff/new" className="btn btn-primary">
+          ✉️ ユーザー招待
+        </Link>
       </div>
-      <div className="card"><div className="card-body" style={{ padding: 0 }}><div className="table-container"><table>
-        <thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>所属</th><th>レベル</th><th>入社日</th><th>操作</th></tr></thead>
-        <tbody>
-          {staffList.map(s => (
-            <tr key={s.id}>
-              <td className="font-semibold">{s.name}</td>
-              <td className="text-sm text-secondary">{s.email}</td>
-              <td><span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>{ROLE_LABELS[s.role]}</span></td>
-              <td className="text-sm">{orgMap[s.organizationId]?.name || '—'}</td>
-              <td><span className={`badge ${LEVEL_BADGE_CLASS[s.currentLevel]}`} style={{ fontSize: '0.7rem' }}>{LEVEL_LABELS[s.currentLevel]}</span></td>
-              <td className="text-sm text-secondary">{s.hireDate || '—'}</td>
-              <td>
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                  <Link href={`/admin/staff/${s.id}/edit`} className="btn btn-outline btn-sm">✏️ 編集</Link>
-                  {s.id !== user.id ? (
-                    <button className="btn btn-sm" style={{ color: 'var(--color-danger)', border: '1px solid var(--color-danger)', background: 'transparent', cursor: 'pointer' }} onClick={() => handleDelete(s.id, s.name)}>🗑</button>
-                  ) : (<span className="text-sm text-secondary">（自分）</span>)}
-                </div>
-              </td>
-            </tr>
-          ))}
-          {staffList.length === 0 && (<tr><td colSpan={7}><div className="empty-state"><div className="empty-state-icon">📭</div><p>スタッフが登録されていません</p></div></td></tr>)}
-        </tbody>
-      </table></div></div></div>
+
+      {/* スタッフテーブル */}
+      <div className="card animate-fadeInUp">
+        <div style={{ padding: 0 }}>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>氏名</th>
+                  <th>メール</th>
+                  <th>ロール</th>
+                  <th>所属</th>
+                  <th>レベル</th>
+                  <th>入社日</th>
+                  <th style={{ textAlign: 'right' }}>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staffList.map((s, idx) => (
+                  <tr key={s.id} className="animate-fadeIn" style={{ animationDelay: `${idx * 0.03}s` }}>
+                    <td style={{ fontWeight: 600 }}>{s.name}</td>
+                    <td className="text-sm text-secondary">{s.email}</td>
+                    <td>
+                      <span className="badge badge-primary">{ROLE_LABELS[s.role]}</span>
+                    </td>
+                    <td className="text-sm">{orgMap[s.organizationId]?.name || '—'}</td>
+                    <td>
+                      <span className={`badge ${LEVEL_BADGE_CLASS[s.currentLevel]}`}>
+                        {LEVEL_LABELS[s.currentLevel]}
+                      </span>
+                    </td>
+                    <td className="text-sm text-secondary">{s.hireDate || '—'}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <Link href={`/admin/staff/${s.id}/edit`} className="btn btn-outline btn-sm">
+                          ✏️ 編集
+                        </Link>
+                        {s.id !== user.id ? (
+                          <button
+                            className="btn btn-sm btn-ghost"
+                            style={{ color: 'var(--color-danger)' }}
+                            onClick={() => handleDelete(s.id, s.name)}
+                            title="削除"
+                          >
+                            🗑
+                          </button>
+                        ) : (
+                          <span className="badge badge-muted" style={{ fontSize: '0.65rem' }}>自分</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {staffList.length === 0 && (
+                  <tr>
+                    <td colSpan={7}>
+                      <div className="empty-state">
+                        <div className="empty-state-icon">📭</div>
+                        <p>スタッフが登録されていません</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
