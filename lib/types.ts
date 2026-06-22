@@ -101,6 +101,8 @@ export interface CourseProgress {
   completedAt: string | null;
   /** 引継ぎメモ（担当者間の申し送り事項） */
   memo: string | null;
+  /** 最終更新者のユーザーID（引継ぎ追跡用） */
+  updatedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -272,6 +274,8 @@ export interface LearnerDetail {
   certifications: CertificationWithDetails[];
   /** 現在のレベル */
   currentLevel: CertificationLevel;
+  /** 進捗の最終更新者ID→氏名のマップ（引継ぎ表示用） */
+  updaterNames: Record<string, string>;
 }
 
 /** カリキュラム別の進捗 */

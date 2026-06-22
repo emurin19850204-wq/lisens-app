@@ -59,7 +59,7 @@ export default function LearnerDetailClient() {
     );
   }
 
-  const { user: learner, organization, currentLevel, curriculumProgresses, evaluations, certifications } = detail;
+  const { user: learner, organization, currentLevel, curriculumProgresses, evaluations, certifications, updaterNames } = detail;
   const canEvaluate = CAN_EVALUATE_ROLES.includes(currentUser.role);
   const canApplyCert = CAN_APPLY_CERTIFICATION_ROLES.includes(currentUser.role);
   const canEditProgress = CAN_EDIT_PROGRESS_ROLES.includes(currentUser.role);
@@ -75,7 +75,7 @@ export default function LearnerDetailClient() {
   };
 
   const handleStatusChange = async (subjectId: string, newStatus: ProgressStatus) => {
-    await updateProgressStatus(learner.id, subjectId, newStatus);
+    await updateProgressStatus(learner.id, subjectId, newStatus, currentUser.id);
     await refresh();
   };
 
@@ -88,9 +88,9 @@ export default function LearnerDetailClient() {
     }
     const newDate = value ? new Date(value + 'T00:00:00Z').toISOString() : null;
     if (field === 'startedAt') {
-      await updateProgressDates(learner.id, subjectId, newDate, currentCompleted);
+      await updateProgressDates(learner.id, subjectId, newDate, currentCompleted, currentUser.id);
     } else {
-      await updateProgressDates(learner.id, subjectId, currentStarted, newDate);
+      await updateProgressDates(learner.id, subjectId, currentStarted, newDate, currentUser.id);
     }
     await refresh();
   };
@@ -101,7 +101,7 @@ export default function LearnerDetailClient() {
 
   const handleMemoSave = async (subjectId: string) => {
     const memo = editingMemos[subjectId] ?? '';
-    await updateProgressMemo(learner.id, subjectId, memo);
+    await updateProgressMemo(learner.id, subjectId, memo, currentUser.id);
     setEditingMemos(prev => { const next = { ...prev }; delete next[subjectId]; return next; });
     await refresh();
   };
@@ -221,6 +221,11 @@ export default function LearnerDetailClient() {
                                   <span className="text-sm font-semibold" style={{ color: 'var(--color-primary)' }}>{isLearner ? '💬 講師からのコメント' : '📋 引継ぎメモ'}</span>
                                   {sp.subject.description && <span className="text-sm text-secondary">| 科目概要: {sp.subject.description}</span>}
                                 </div>
+                                {!isLearner && sp.progress?.updatedAt && (
+                                  <div className="text-sm text-secondary" style={{ marginBottom: 'var(--space-xs)' }}>
+                                    🕒 最終更新: {sp.progress.updatedBy ? (updaterNames[sp.progress.updatedBy] ?? '担当者') : '—'}・{new Date(sp.progress.updatedAt).toLocaleString('ja-JP')}
+                                  </div>
+                                )}
                                 {canEditProgress && isEditingMemo(subjectId) ? (
                                   <div>
                                     <textarea className="form-input" style={{ width: '100%', minHeight: '80px', fontSize: '0.85rem', resize: 'vertical' }} value={editingMemos[subjectId] || ''} onChange={e => setEditingMemos(prev => ({ ...prev, [subjectId]: e.target.value }))} placeholder="引継ぎ事項、指導上の注意点、受講者の特記事項などを記入..." />

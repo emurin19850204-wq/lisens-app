@@ -88,6 +88,7 @@ function mapCourseProgress(row: any): CourseProgress {
     startedAt: row.started_at,
     completedAt: row.completed_at,
     memo: row.memo,
+    updatedBy: row.updated_by ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -138,6 +139,19 @@ function mapCertificationLevel(row: any): CertificationLevel {
 // ============================================
 // ユーザー・組織の取得
 // ============================================
+
+/**
+ * 受講者のトラックに該当するカリキュラムか判定する。
+ * 共通・ブラッシュアップは全員対象。トラック専門は本人のトラックに含まれる場合のみ。
+ */
+function isRelevantCurriculum(
+  cur: { type: string; track_code: string | null },
+  tracks: string[],
+): boolean {
+  if (cur.type === 'common' || cur.type === 'brushup') return true;
+  if (cur.type === 'track') return !!cur.track_code && tracks.includes(cur.track_code);
+  return false;
+}
 
 export async function getUserById(id: string): Promise<User | undefined> {
   const { data } = await sb().from('users').select('*').eq('id', id).single();
@@ -190,10 +204,22 @@ export async function getLearnerSummary(userId: string): Promise<LearnerSummary 
   const org = await getOrganizationById(user.organizationId);
   if (!org) return undefined;
 
-  const { data: progresses } = await sb()
-    .from('course_progresses').select('*').eq('user_id', userId);
-  const total = progresses?.length || 0;
-  const completed = progresses?.filter(p => p.status === 'completed').length || 0;
+  // 受講者のトラックに該当するカリキュラムの科目だけを分母にする
+  const [{ data: curricula }, { data: allSubjects }, { data: progresses }] = await Promise.all([
+    sb().from('curricula').select('id, type, track_code'),
+    sb().from('subjects').select('id, curriculum_id'),
+    sb().from('course_progresses').select('subject_id, status').eq('user_id', userId),
+  ]);
+  const relevantCurIds = new Set(
+    (curricula || []).filter(c => isRelevantCurriculum(c, user.tracks)).map(c => c.id),
+  );
+  const relevantSubjectIds = new Set(
+    (allSubjects || []).filter(s => relevantCurIds.has(s.curriculum_id)).map(s => s.id),
+  );
+  const total = relevantSubjectIds.size;
+  const completed = (progresses || []).filter(
+    p => p.status === 'completed' && relevantSubjectIds.has(p.subject_id),
+  ).length;
   const overallProgress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   const { data: evals } = await sb()
@@ -230,21 +256,38 @@ export async function getLearnerDetail(userId: string): Promise<LearnerDetail | 
   const currentLevel = mapCertificationLevel(levelData);
 
   const [curriculumProgresses, evaluations, certifications] = await Promise.all([
-    getCurriculumProgresses(userId),
+    getCurriculumProgresses(userId, user.tracks),
     getEvaluationsWithDetails(userId),
     getCertificationsForLearner(userId),
   ]);
 
-  return { user, organization: org, curriculumProgresses, evaluations, certifications, currentLevel };
+  // 引継ぎ: 進捗を最後に更新した担当者名を解決する
+  const updaterNames: Record<string, string> = {};
+  const updaterIds = [
+    ...new Set(
+      curriculumProgresses
+        .flatMap(cp => cp.subjects)
+        .map(sp => sp.progress?.updatedBy)
+        .filter((v): v is string => !!v),
+    ),
+  ];
+  if (updaterIds.length > 0) {
+    const { data: us } = await sb().from('users').select('id, name').in('id', updaterIds);
+    for (const u of us || []) updaterNames[u.id] = u.name;
+  }
+
+  return { user, organization: org, curriculumProgresses, evaluations, certifications, currentLevel, updaterNames };
 }
 
-async function getCurriculumProgresses(userId: string): Promise<CurriculumProgress[]> {
+async function getCurriculumProgresses(userId: string, tracks: string[]): Promise<CurriculumProgress[]> {
   const { data: curricula } = await sb().from('curricula').select('*').order('sort_order');
   const { data: allSubjects } = await sb().from('subjects').select('*').order('sort_order');
   const { data: allProgresses } = await sb()
     .from('course_progresses').select('*').eq('user_id', userId);
 
-  return (curricula || []).map(cur => {
+  return (curricula || [])
+    .filter(cur => isRelevantCurriculum(cur, tracks))
+    .map(cur => {
     const curSubjects = (allSubjects || []).filter(s => s.curriculum_id === cur.id);
     const subjectProgresses: SubjectProgress[] = curSubjects.map(sub => {
       const progress = (allProgresses || []).find(p => p.subject_id === sub.id);
@@ -435,7 +478,7 @@ export async function getAllSubjects(): Promise<Subject[]> {
 // ============================================
 
 export async function updateProgressStatus(
-  userId: string, subjectId: string, status: ProgressStatus,
+  userId: string, subjectId: string, status: ProgressStatus, actingUserId: string,
 ): Promise<CourseProgress> {
   const now = new Date().toISOString();
   // 既存チェック
@@ -444,7 +487,7 @@ export async function updateProgressStatus(
     .eq('user_id', userId).eq('subject_id', subjectId).single();
 
   if (existing) {
-    const updates: Record<string, unknown> = { status, updated_at: now };
+    const updates: Record<string, unknown> = { status, updated_at: now, updated_by: actingUserId };
     if (status === 'in_progress' && !existing.started_at) updates.started_at = now;
     if (status === 'completed') {
       updates.completed_at = now;
@@ -464,12 +507,13 @@ export async function updateProgressStatus(
     user_id: userId, subject_id: subjectId, status,
     started_at: status !== 'not_started' ? now : null,
     completed_at: status === 'completed' ? now : null,
+    updated_by: actingUserId,
   }).select().single();
   return mapCourseProgress(data);
 }
 
 export async function updateProgressMemo(
-  userId: string, subjectId: string, memo: string,
+  userId: string, subjectId: string, memo: string, actingUserId: string,
 ): Promise<CourseProgress> {
   const now = new Date().toISOString();
   const { data: existing } = await sb()
@@ -478,19 +522,20 @@ export async function updateProgressMemo(
 
   if (existing) {
     const { data } = await sb().from('course_progresses')
-      .update({ memo: memo || null, updated_at: now }).eq('id', existing.id).select().single();
+      .update({ memo: memo || null, updated_at: now, updated_by: actingUserId }).eq('id', existing.id).select().single();
     return mapCourseProgress(data);
   }
 
   const { data } = await sb().from('course_progresses').insert({
     user_id: userId, subject_id: subjectId, status: 'not_started', memo: memo || null,
+    updated_by: actingUserId,
   }).select().single();
   return mapCourseProgress(data);
 }
 
 export async function updateProgressDates(
   userId: string, subjectId: string,
-  startedAt: string | null, completedAt: string | null,
+  startedAt: string | null, completedAt: string | null, actingUserId: string,
 ): Promise<CourseProgress> {
   const now = new Date().toISOString();
   const { data: existing } = await sb()
@@ -499,7 +544,7 @@ export async function updateProgressDates(
 
   if (existing) {
     const { data } = await sb().from('course_progresses')
-      .update({ started_at: startedAt, completed_at: completedAt, updated_at: now })
+      .update({ started_at: startedAt, completed_at: completedAt, updated_at: now, updated_by: actingUserId })
       .eq('id', existing.id).select().single();
     return mapCourseProgress(data);
   }
@@ -508,6 +553,7 @@ export async function updateProgressDates(
   const { data } = await sb().from('course_progresses').insert({
     user_id: userId, subject_id: subjectId, status,
     started_at: startedAt, completed_at: completedAt,
+    updated_by: actingUserId,
   }).select().single();
   return mapCourseProgress(data);
 }
