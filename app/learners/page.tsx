@@ -11,7 +11,7 @@ import {
   LEVEL_LABELS, LEVEL_BADGE_CLASS,
   TRACK_LABELS, TRACK_BADGE_CLASS,
 } from '@/lib/constants';
-import type { LearnerSummary } from '@/lib/types';
+import type { LearnerSummary, TrackCode } from '@/lib/types';
 
 const CAN_MANAGE_ROLES = ['admin', 'education_manager'];
 
@@ -20,24 +20,42 @@ export default function LearnersPage() {
   const [summaries, setSummaries] = useState<LearnerSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortKey, setSortKey] = useState<'progress_asc' | 'progress_desc' | 'name'>('progress_asc');
+  const [filterStore, setFilterStore] = useState('');
+  const [filterTrack, setFilterTrack] = useState('');
 
   useEffect(() => {
     if (!user) return;
     getLearnerSummaries(user).then(s => { setSummaries(s); setLoading(false); });
   }, [user]);
 
-  // フックは早期returnより前に常に同じ順序で呼ぶ（Rules of Hooks 準拠）
+  // 店舗の選択肢（フックは早期returnより前に常に同じ順序で呼ぶ）
+  const storeOptions = useMemo(
+    () => [...new Set(summaries.map(s => s.organization.name))].sort((a, b) => a.localeCompare(b, 'ja')),
+    [summaries],
+  );
+
+  // 検索 → 絞り込み（店舗/トラック）→ 並び替え
   const filteredSummaries = useMemo(() => {
-    if (!searchQuery.trim()) return summaries;
+    let list = summaries;
     const q = searchQuery.trim().toLowerCase();
-    return summaries.filter(s =>
-      s.user.name.toLowerCase().includes(q) ||
-      s.organization.name.toLowerCase().includes(q) ||
-      s.user.tracks.some(t => TRACK_LABELS[t].toLowerCase().includes(q)) ||
-      LEVEL_LABELS[s.user.currentLevel].toLowerCase().includes(q) ||
-      s.user.email.toLowerCase().includes(q)
-    );
-  }, [summaries, searchQuery]);
+    if (q) {
+      list = list.filter(s =>
+        s.user.name.toLowerCase().includes(q) ||
+        s.organization.name.toLowerCase().includes(q) ||
+        s.user.tracks.some(t => TRACK_LABELS[t].toLowerCase().includes(q)) ||
+        LEVEL_LABELS[s.user.currentLevel].toLowerCase().includes(q) ||
+        s.user.email.toLowerCase().includes(q)
+      );
+    }
+    if (filterStore) list = list.filter(s => s.organization.name === filterStore);
+    if (filterTrack) list = list.filter(s => s.user.tracks.includes(filterTrack as TrackCode));
+    return [...list].sort((a, b) => {
+      if (sortKey === 'name') return a.user.name.localeCompare(b.user.name, 'ja');
+      if (sortKey === 'progress_desc') return b.overallProgress - a.overallProgress;
+      return a.overallProgress - b.overallProgress; // progress_asc（低い順=要フォロー優先）
+    });
+  }, [summaries, searchQuery, filterStore, filterTrack, sortKey]);
 
   if (!user) return null;
   const canManage = CAN_MANAGE_ROLES.includes(user.role);
@@ -86,9 +104,26 @@ export default function LearnersPage() {
               <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--color-text-secondary)' }}>✕</button>
             )}
           </div>
-          {searchQuery && (
-            <div className="text-sm text-secondary" style={{ marginTop: '2px' }}>{filteredSummaries.length}件がヒット</div>
-          )}
+          {/* 並び替え・絞り込み（滞留者の特定用） */}
+          <div style={{ display: 'flex', gap: 'var(--space-sm)', marginTop: 'var(--space-sm)', flexWrap: 'wrap', alignItems: 'center' }}>
+            <select className="form-input" style={{ width: 'auto', fontSize: '0.85rem', padding: '4px 8px' }} value={sortKey} onChange={e => setSortKey(e.target.value as typeof sortKey)}>
+              <option value="progress_asc">並び順: 進捗率（低い順）</option>
+              <option value="progress_desc">並び順: 進捗率（高い順）</option>
+              <option value="name">並び順: 氏名</option>
+            </select>
+            <select className="form-input" style={{ width: 'auto', fontSize: '0.85rem', padding: '4px 8px' }} value={filterStore} onChange={e => setFilterStore(e.target.value)}>
+              <option value="">全店舗</option>
+              {storeOptions.map(name => (<option key={name} value={name}>{name}</option>))}
+            </select>
+            <select className="form-input" style={{ width: 'auto', fontSize: '0.85rem', padding: '4px 8px' }} value={filterTrack} onChange={e => setFilterTrack(e.target.value)}>
+              <option value="">全トラック</option>
+              {Object.entries(TRACK_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
+            </select>
+            {(filterStore || filterTrack || sortKey !== 'progress_asc') && (
+              <button className="btn btn-ghost btn-sm" onClick={() => { setFilterStore(''); setFilterTrack(''); setSortKey('progress_asc'); }}>条件クリア</button>
+            )}
+            <span className="text-sm text-secondary" style={{ marginLeft: 'auto' }}>{filteredSummaries.length}名表示</span>
+          </div>
         </div>
       </div>
 
@@ -105,7 +140,12 @@ export default function LearnersPage() {
               <tbody>
                 {filteredSummaries.map((s, idx) => (
                   <tr key={s.user.id} className="animate-fadeIn" style={{ animationDelay: `${idx * 0.03}s` }}>
-                    <td><Link href={`/learners/${s.user.id}`} style={{ fontWeight: 600 }}>{s.user.name}</Link></td>
+                    <td>
+                      <Link href={`/learners/${s.user.id}`} style={{ fontWeight: 600 }}>{s.user.name}</Link>
+                      {s.overallProgress < 30 && (
+                        <span className="badge badge-danger" style={{ marginLeft: '6px', fontSize: '0.65rem', padding: '1px 6px' }} title="進捗率が低く、フォローが必要です">要フォロー</span>
+                      )}
+                    </td>
                     <td>{s.organization.name}</td>
                     <td><span className={`badge ${LEVEL_BADGE_CLASS[s.user.currentLevel]}`}>{s.currentLevelName}</span></td>
                     <td>

@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { useRouteId } from '@/lib/route-id';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { getLearnerDetail, updateProgressStatus, updateProgressMemo, updateProgressDates, updateSubjectHours } from '@/lib/data';
+import { getLearnerDetail, updateProgressStatus, updateProgressMemo, updateProgressDates, updateSubjectHours, bulkUpdateProgressStatus } from '@/lib/data';
 import {
   ROLE_LABELS, LEVEL_BADGE_CLASS,
   PROGRESS_STATUS_LABELS, PROGRESS_STATUS_BADGE_CLASS,
@@ -18,7 +18,7 @@ import {
   SECTION_LABELS, SECTION_ICONS, SECTION_MAX_SCORES,
   OSCE_TOTAL_SCORE, EVALUATION_TEMPLATES,
 } from '@/lib/constants';
-import type { EvaluationSectionCode, ProgressStatus, LearnerDetail } from '@/lib/types';
+import type { EvaluationSectionCode, ProgressStatus, LearnerDetail, CurriculumProgress } from '@/lib/types';
 
 type TabKey = 'progress' | 'evaluations' | 'certifications';
 const CAN_EDIT_PROGRESS_ROLES = ['admin', 'education_manager', 'evaluator', 'store_manager'];
@@ -76,6 +76,14 @@ export default function LearnerDetailClient() {
 
   const handleStatusChange = async (subjectId: string, newStatus: ProgressStatus) => {
     await updateProgressStatus(learner.id, subjectId, newStatus, currentUser.id);
+    await refresh();
+  };
+
+  const handleBulkStatus = async (cp: CurriculumProgress, status: ProgressStatus) => {
+    const subjectIds = cp.subjects.map(s => s.subject.id);
+    if (subjectIds.length === 0) return;
+    if (!confirm(`「${cp.curriculum.name}」の全${subjectIds.length}科目を「${PROGRESS_STATUS_LABELS[status]}」にします。よろしいですか？`)) return;
+    await bulkUpdateProgressStatus(learner.id, subjectIds, status, currentUser.id);
     await refresh();
   };
 
@@ -170,6 +178,13 @@ export default function LearnerDetailClient() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
                   <div className="progress-bar" style={{ width: '120px' }}><div className={`progress-bar-fill ${cp.progressRate === 100 ? 'completed' : ''}`} style={{ width: `${cp.progressRate}%` }} /></div>
                   <span className="text-sm font-semibold">{cp.progressRate}%</span>
+                  {isEditingProgress && canEditProgress && (
+                    <div style={{ display: 'flex', gap: '4px', marginLeft: 'var(--space-sm)' }} onClick={e => e.stopPropagation()}>
+                      <button className="btn btn-outline btn-sm" title="このカリキュラムの全科目を完了にする" onClick={() => handleBulkStatus(cp, 'completed')}>全完了</button>
+                      <button className="btn btn-outline btn-sm" title="このカリキュラムの全科目を受講中にする" onClick={() => handleBulkStatus(cp, 'in_progress')}>全受講中</button>
+                      <button className="btn btn-ghost btn-sm" title="このカリキュラムの全科目を未着手に戻す" onClick={() => handleBulkStatus(cp, 'not_started')}>全未着手</button>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="card-body" style={{ padding: 0 }}>

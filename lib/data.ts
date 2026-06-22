@@ -512,6 +512,36 @@ export async function updateProgressStatus(
   return mapCourseProgress(data);
 }
 
+/**
+ * カリキュラム単位などで複数科目の進捗ステータスを一括更新する。
+ * 既存の開始日は保持し、updated_by に担当者を記録する（引継ぎ追跡）。
+ */
+export async function bulkUpdateProgressStatus(
+  userId: string, subjectIds: string[], status: ProgressStatus, actingUserId: string,
+): Promise<void> {
+  if (subjectIds.length === 0) return;
+  const now = new Date().toISOString();
+  const { data: existing } = await sb()
+    .from('course_progresses').select('subject_id, started_at')
+    .eq('user_id', userId).in('subject_id', subjectIds);
+  const startedMap = new Map<string, string | null>(
+    (existing || []).map(r => [r.subject_id as string, r.started_at as string | null]),
+  );
+  const rows = subjectIds.map(sid => {
+    const prevStarted = startedMap.get(sid) ?? null;
+    return {
+      user_id: userId,
+      subject_id: sid,
+      status,
+      started_at: status === 'not_started' ? null : (prevStarted ?? now),
+      completed_at: status === 'completed' ? now : null,
+      updated_by: actingUserId,
+      updated_at: now,
+    };
+  });
+  await sb().from('course_progresses').upsert(rows, { onConflict: 'user_id,subject_id' });
+}
+
 export async function updateProgressMemo(
   userId: string, subjectId: string, memo: string, actingUserId: string,
 ): Promise<CourseProgress> {
