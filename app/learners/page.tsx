@@ -26,9 +26,7 @@ export default function LearnersPage() {
     getLearnerSummaries(user).then(s => { setSummaries(s); setLoading(false); });
   }, [user]);
 
-  if (!user) return null;
-  const canManage = CAN_MANAGE_ROLES.includes(user.role);
-
+  // フックは早期returnより前に常に同じ順序で呼ぶ（Rules of Hooks 準拠）
   const filteredSummaries = useMemo(() => {
     if (!searchQuery.trim()) return summaries;
     const q = searchQuery.trim().toLowerCase();
@@ -40,6 +38,9 @@ export default function LearnersPage() {
       s.user.email.toLowerCase().includes(q)
     );
   }, [summaries, searchQuery]);
+
+  if (!user) return null;
+  const canManage = CAN_MANAGE_ROLES.includes(user.role);
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`${name}さんを研修者一覧から削除しますか？\nこの操作は元に戻せません。`)) return;

@@ -24,7 +24,12 @@ export default function NewEvaluationPage() {
   const { user: currentUser } = useAuth();
   const learnerId = searchParams.get('learner_id') || '';
   const [learner, setLearner] = useState<User | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
+  // learner_id が無ければ最初からローディング不要（effect内での同期setStateを避ける）
+  const [loading, setLoading] = useState(() =>
+    typeof window === 'undefined'
+      ? true
+      : new URLSearchParams(window.location.search).has('learner_id')
+  );
   const [track, setTrack] = useState<TrackCode>('weight');
   const [overallComment, setOverallComment] = useState('');
   const [goodPoints, setGoodPoints] = useState(['', '', '']);
@@ -34,8 +39,8 @@ export default function NewEvaluationPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (learnerId) getUserById(learnerId).then(u => { setLearner(u); setLoading(false); });
-    else setLoading(false);
+    if (!learnerId) return;
+    getUserById(learnerId).then(u => { setLearner(u); setLoading(false); });
   }, [learnerId]);
 
   if (!currentUser || !CAN_EVALUATE_ROLES.includes(currentUser.role)) {

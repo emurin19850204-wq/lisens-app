@@ -3,7 +3,8 @@
  */
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouteId } from '@/lib/route-id';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -18,8 +19,8 @@ const STAFF_ROLES: { value: UserRole; description: string }[] = [
   { value: 'store_manager', description: '所属店舗の研修者管理・進捗確認が可能' },
 ];
 
-export default function EditStaffClient({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function EditStaffClient() {
+  const id = useRouteId(2);
   const router = useRouter();
   const { user: currentUser } = useAuth();
 

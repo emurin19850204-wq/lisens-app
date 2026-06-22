@@ -27,6 +27,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // ハイドレーション完了をクライアント側で検知するための意図的なパターン。
+    // 静的エクスポートではマウント後に pathname 判定を行う必要がある。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 

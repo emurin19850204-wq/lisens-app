@@ -3,27 +3,28 @@
  */
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouteId } from '@/lib/route-id';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { getLearnerDetail, updateProgressStatus, updateProgressMemo, updateProgressDates, updateSubjectHours } from '@/lib/data';
 import {
-  ROLE_LABELS, LEVEL_LABELS, LEVEL_BADGE_CLASS,
+  ROLE_LABELS, LEVEL_BADGE_CLASS,
   PROGRESS_STATUS_LABELS, PROGRESS_STATUS_BADGE_CLASS,
   EVALUATION_STATUS_LABELS, EVALUATION_STATUS_BADGE_CLASS,
   CERTIFICATION_STATUS_LABELS, CERTIFICATION_STATUS_BADGE_CLASS,
   CAN_EVALUATE_ROLES, CAN_APPLY_CERTIFICATION_ROLES,
   TRACK_LABELS, TRACK_BADGE_CLASS,
   SECTION_LABELS, SECTION_ICONS, SECTION_MAX_SCORES,
-  OSCE_TOTAL_SCORE, OSCE_PASS_SCORE, EVALUATION_TEMPLATES,
+  OSCE_TOTAL_SCORE, EVALUATION_TEMPLATES,
 } from '@/lib/constants';
 import type { EvaluationSectionCode, ProgressStatus, LearnerDetail } from '@/lib/types';
 
 type TabKey = 'progress' | 'evaluations' | 'certifications';
 const CAN_EDIT_PROGRESS_ROLES = ['admin', 'education_manager', 'evaluator', 'store_manager'];
 
-export default function LearnerDetailClient({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function LearnerDetailClient() {
+  const id = useRouteId(1);
   const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<TabKey>('progress');
   const [isEditingProgress, setIsEditingProgress] = useState(false);
@@ -65,7 +66,12 @@ export default function LearnerDetailClient({ params }: { params: Promise<{ id: 
   const isLearner = currentUser.role === 'learner';
 
   const toggleSubjectExpand = (subjectId: string) => {
-    setExpandedSubjects(prev => { const next = new Set(prev); next.has(subjectId) ? next.delete(subjectId) : next.add(subjectId); return next; });
+    setExpandedSubjects(prev => {
+      const next = new Set(prev);
+      if (next.has(subjectId)) next.delete(subjectId);
+      else next.add(subjectId);
+      return next;
+    });
   };
 
   const handleStatusChange = async (subjectId: string, newStatus: ProgressStatus) => {

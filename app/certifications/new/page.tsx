@@ -60,6 +60,21 @@ export default function NewCertificationPage() {
   const nextLevelCode = currentLevelIndex >= 0 && currentLevelIndex < LEVEL_ORDER.length - 1 ? LEVEL_ORDER[currentLevelIndex + 1] : null;
   const nextLevel = nextLevelCode ? allLevels.find(l => l.code === nextLevelCode) : null;
 
+  // 申請レベルがLv1のときだけトラック別認定（trackが必須）
+  const selectedLevel = allLevels.find(l => l.id === levelId);
+  const isTrackLevel = selectedLevel?.code === 'lv1';
+  const trackOptions: TrackCode[] =
+    selectedLearner?.tracks && selectedLearner.tracks.length > 0
+      ? selectedLearner.tracks
+      : (['weight', 'pilates', 'stretch'] as TrackCode[]);
+
+  // レベル変更時、Lv1以外になったらトラック選択をリセット
+  const handleLevelChange = (newLevelId: string) => {
+    setLevelId(newLevelId);
+    const lv = allLevels.find(l => l.id === newLevelId);
+    if (lv?.code !== 'lv1') setCertTrack('');
+  };
+
   const handleLearnerChange = async (newLearnerId: string) => {
     setLearnerId(newLearnerId);
     const learner = await getUserById(newLearnerId);
@@ -79,9 +94,9 @@ export default function NewCertificationPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!learnerId || !levelId || !reason.trim()) return;
+    if (!learnerId || !levelId || !reason.trim() || (isTrackLevel && !certTrack)) return;
     setIsSubmitting(true);
-    await addCertification(learnerId, levelId, currentUser.id, reason, certTrack || null);
+    await addCertification(learnerId, levelId, currentUser.id, reason, isTrackLevel ? (certTrack || null) : null);
     router.push('/certifications');
   };
 
@@ -104,11 +119,24 @@ export default function NewCertificationPage() {
           )}
         </div></div>
         <div className="card" style={{ marginBottom: 'var(--space-md)' }}><div className="card-header">申請レベル</div><div className="card-body">
-          <select className="form-select" value={levelId} onChange={e => setLevelId(e.target.value)} required>
+          <select className="form-select" value={levelId} onChange={e => handleLevelChange(e.target.value)} required>
             <option value="">レベルを選択してください</option>
             {allLevels.map(level => (<option key={level.id} value={level.id}>{level.name} — {level.description}</option>))}
           </select>
         </div></div>
+        {isTrackLevel && (
+          <div className="card" style={{ marginBottom: 'var(--space-md)' }}><div className="card-header">🎯 認定トラック（Lv1はトラック別認定）</div><div className="card-body">
+            <select className="form-select" value={certTrack} onChange={e => setCertTrack(e.target.value as TrackCode | '')} required>
+              <option value="">トラックを選択してください</option>
+              {trackOptions.map(t => (<option key={t} value={t}>{TRACK_LABELS[t]}</option>))}
+            </select>
+            {certTrack && (
+              <div style={{ marginTop: 'var(--space-sm)' }}>
+                <span className={`badge ${TRACK_BADGE_CLASS[certTrack]}`} style={{ fontSize: '0.85rem', padding: '4px 12px' }}>{TRACK_LABELS[certTrack]} トラックで認定</span>
+              </div>
+            )}
+          </div></div>
+        )}
         <div className="card" style={{ marginBottom: 'var(--space-md)' }}><div className="card-header">📄 申請理由</div><div className="card-body">
           <textarea className="form-textarea" value={reason} onChange={e => setReason(e.target.value)} placeholder="認定を推薦する理由を具体的に記入してください" rows={5} required />
         </div></div>
@@ -128,7 +156,7 @@ export default function NewCertificationPage() {
         )}
         <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end' }}>
           <Link href={learnerId ? `/learners/${learnerId}` : '/certifications'} className="btn btn-outline">キャンセル</Link>
-          <button type="submit" className="btn btn-primary" disabled={isSubmitting || !learnerId || !levelId || !reason.trim()}>{isSubmitting ? '申請中...' : '🏆 認定を申請する'}</button>
+          <button type="submit" className="btn btn-primary" disabled={isSubmitting || !learnerId || !levelId || !reason.trim() || (isTrackLevel && !certTrack)}>{isSubmitting ? '申請中...' : '🏆 認定を申請する'}</button>
         </div>
       </form>
     </div>

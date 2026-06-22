@@ -9,7 +9,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { getAllOrganizations, getStores } from '@/lib/data';
+import { getAllOrganizations } from '@/lib/data';
 import { getSupabase } from '@/lib/supabase';
 import { TRACK_LABELS, TRACK_BADGE_CLASS } from '@/lib/constants';
 import type { TrackCode, Organization } from '@/lib/types';

@@ -3,7 +3,8 @@
  */
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouteId } from '@/lib/route-id';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import {
@@ -25,8 +26,8 @@ const TRACK_OPTIONS: { value: TrackCode; label: string }[] = [
   { value: 'stretch', label: TRACK_LABELS.stretch },
 ];
 
-export default function EditCurriculumClient({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function EditCurriculumClient() {
+  const id = useRouteId(2);
   const { user: currentUser } = useAuth();
 
   const [curriculum, setCurriculum] = useState<Curriculum | undefined>();

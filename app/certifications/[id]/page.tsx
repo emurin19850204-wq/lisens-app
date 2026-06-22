@@ -1,18 +1,13 @@
 /**
  * LISENS - 認定詳細・承認画面 - サーバーコンポーネントラッパー
  */
-import { certifications } from '@/lib/dummy-data';
 import CertificationDetailClient from './PageClient';
 
-/** 静的エクスポート用: 全認定IDのパスを事前生成 */
+/** 静的エクスポート用プレースホルダ（未知IDはNetlifyリライトでフォールバック） */
 export function generateStaticParams() {
-  return certifications.map(c => ({ id: c.id }));
+  return [{ id: '_' }];
 }
 
-export default function CertificationDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  return <CertificationDetailClient params={params} />;
+export default function CertificationDetailPage() {
+  return <CertificationDetailClient />;
 }

@@ -19,6 +19,33 @@
   to = "/.netlify/functions/:splat"
   status = 200
 
+# ============================================
+# 静的エクスポートの動的ルート フォールバック
+# 事前生成していないID（実データ）でも詳細ページを表示できるよう、
+# 該当パスをプレースホルダのシェルHTMLにリライト（status=200）する。
+# force未指定（=false）なので、実在する静的ファイル（/learners/new 等）が優先される。
+# 実際のIDはクライアントが window.location から取得する。
+# ============================================
+[[redirects]]
+  from = "/learners/*"
+  to = "/learners/_/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/certifications/*"
+  to = "/certifications/_/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin/staff/*/edit"
+  to = "/admin/staff/_/edit/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin/curriculum/*/edit"
+  to = "/admin/curriculum/_/edit/index.html"
+  status = 200
+
 # 静的アセットのキャッシュ設定
 [[headers]]
   for = "/_next/static/*"

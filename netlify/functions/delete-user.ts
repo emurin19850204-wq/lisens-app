@@ -10,7 +10,7 @@
  */
 import { createClient } from '@supabase/supabase-js';
 
-export default async (req: Request) => {
+const handler = async (req: Request) => {
   // CORS対応
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -116,6 +116,8 @@ export default async (req: Request) => {
     return new Response(JSON.stringify({ error: 'サーバーエラーが発生しました' }), { status: 500, headers });
   }
 };
+
+export default handler;
 
 export const config = {
   path: '/api/delete-user',

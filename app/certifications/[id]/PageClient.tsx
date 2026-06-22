@@ -3,7 +3,8 @@
  */
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouteId } from '@/lib/route-id';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
@@ -15,8 +16,8 @@ import {
 } from '@/lib/constants';
 import type { CertificationWithDetails, EvaluationWithDetails } from '@/lib/types';
 
-export default function CertificationDetailClient({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function CertificationDetailClient() {
+  const id = useRouteId(1);
   const { user: currentUser } = useAuth();
   const router = useRouter();
   const [rejectionReason, setRejectionReason] = useState('');

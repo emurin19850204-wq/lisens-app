@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 運用用のNode(CommonJS)スクリプト。アプリのビルド対象外なのでLint対象から除外
+    "deploy_clean.js",
+    "deploy_direct.js",
   ]),
 ]);
 

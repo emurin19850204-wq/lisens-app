@@ -1,18 +1,18 @@
 /**
  * LISENS - 研修者詳細画面（個人カルテ）- サーバーコンポーネントラッパー
  */
-import { users } from '@/lib/dummy-data';
 import LearnerDetailClient from './PageClient';
 
-/** 静的エクスポート用: 全ユーザーIDのパスを事前生成 */
+/**
+ * 静的エクスポート用のプレースホルダ。
+ * 実データのIDは事前に分からないため、ここでは1件だけシェルを生成し、
+ * 未知のIDは netlify.toml のリライトでこのシェルにフォールバックさせる。
+ * 実際のIDはクライアント側で window.location から取得する。
+ */
 export function generateStaticParams() {
-  return users.map(u => ({ id: u.id }));
+  return [{ id: '_' }];
 }
 
-export default function LearnerDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  return <LearnerDetailClient params={params} />;
+export default function LearnerDetailPage() {
+  return <LearnerDetailClient />;
 }

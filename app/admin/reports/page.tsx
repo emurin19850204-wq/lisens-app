@@ -11,7 +11,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import {
-  getLearnerSummaries, getAllOrganizations, getStores,
+  getLearnerSummaries, getStores,
   getEvaluationsWithDetails, getCertificationsForLearner,
 } from '@/lib/data';
 import { LEVEL_LABELS, TRACK_LABELS } from '@/lib/constants';

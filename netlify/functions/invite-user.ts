@@ -12,7 +12,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Netlify Function v2 形式
-export default async (req: Request) => {
+const handler = async (req: Request) => {
   // CORS対応
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -255,6 +255,8 @@ export default async (req: Request) => {
 };
 
 // Netlify Function v2 のルーティング設定
+export default handler;
+
 export const config = {
   path: '/api/invite-user',
 };
