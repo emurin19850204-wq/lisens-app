@@ -10,15 +10,16 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { getDashboardStats, getAllCertifications } from '@/lib/data';
+import { getDashboardStats, getAllCertifications, getLearnerSummaries } from '@/lib/data';
 import { ROLE_LABELS, CERTIFICATION_STATUS_BADGE_CLASS } from '@/lib/constants';
-import type { CertificationWithDetails } from '@/lib/types';
+import type { CertificationWithDetails, LearnerSummary } from '@/lib/types';
 
 export default function HomePage() {
   const { user } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState({ totalLearners: 0, pendingCertifications: 0, recentEvaluations: 0, totalCurricula: 0 });
   const [pendingCerts, setPendingCerts] = useState<CertificationWithDetails[]>([]);
+  const [summaries, setSummaries] = useState<LearnerSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 受講者は自分のカルテに自動リダイレクト
@@ -32,9 +33,14 @@ export default function HomePage() {
   useEffect(() => {
     if (!user || user.role === 'learner') return;
     const load = async () => {
-      const [s, certs] = await Promise.all([getDashboardStats(), getAllCertifications()]);
+      const [s, certs, sums] = await Promise.all([
+        getDashboardStats(),
+        getAllCertifications(),
+        getLearnerSummaries(user),
+      ]);
       setStats(s);
       setPendingCerts(certs.filter(c => c.certification.status === 'pending'));
+      setSummaries(sums);
       setLoading(false);
     };
     load();
@@ -69,6 +75,25 @@ export default function HomePage() {
       </div>
     );
   }
+
+  // 進捗俯瞰の集計（研修管理者が全体を一目で把握するため）
+  const ovTotal = summaries.length;
+  const ovAvg = ovTotal > 0 ? Math.round(summaries.reduce((a, s) => a + s.overallProgress, 0) / ovTotal) : 0;
+  const ovCompleted = summaries.filter(s => s.overallProgress === 100).length;
+  const ovFollow = summaries.filter(s => s.overallProgress < 30).length;
+  const storeRows = Object.values(
+    summaries.reduce((acc, s) => {
+      const key = s.organization.name;
+      if (!acc[key]) acc[key] = { name: key, count: 0, sum: 0, follow: 0 };
+      acc[key].count += 1;
+      acc[key].sum += s.overallProgress;
+      if (s.overallProgress < 30) acc[key].follow += 1;
+      return acc;
+    }, {} as Record<string, { name: string; count: number; sum: number; follow: number }>),
+  )
+    .map(r => ({ ...r, avg: Math.round(r.sum / r.count) }))
+    .sort((a, b) => a.avg - b.avg);
+  const laggards = [...summaries].sort((a, b) => a.overallProgress - b.overallProgress).slice(0, 6);
 
   return (
     <div className="page-container">
@@ -114,6 +139,73 @@ export default function HomePage() {
           delay={3}
         />
       </div>
+
+      {/* 研修進捗の俯瞰 */}
+      {ovTotal > 0 && (
+        <div style={{ marginBottom: 'var(--space-xl)' }}>
+          <div className="card animate-fadeInUp" style={{ marginBottom: 'var(--space-md)' }}>
+            <div className="card-header">
+              📊 研修進捗の俯瞰
+              <span className="text-sm text-secondary" style={{ marginLeft: 'auto', fontWeight: 400 }}>
+                全体平均 <strong>{ovAvg}%</strong> ・ 完了 <strong>{ovCompleted}</strong>名 ・ 要フォロー <strong style={{ color: 'var(--color-danger)' }}>{ovFollow}</strong>名（{ovTotal}名中）
+              </span>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--space-md)' }}>
+            {/* 店舗別 */}
+            <div className="card">
+              <div className="card-header">🏢 店舗別の進捗（低い順）</div>
+              <div style={{ padding: 0 }}>
+                <div className="table-container">
+                  <table>
+                    <thead><tr><th>店舗</th><th>人数</th><th>平均進捗</th><th style={{ textAlign: 'center' }}>要フォロー</th></tr></thead>
+                    <tbody>
+                      {storeRows.map(r => (
+                        <tr key={r.name}>
+                          <td style={{ fontWeight: 600 }}>{r.name}</td>
+                          <td className="text-sm text-secondary">{r.count}名</td>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                              <div className="progress-bar" style={{ width: '80px' }}><div className={`progress-bar-fill ${r.avg === 100 ? 'completed' : ''}`} style={{ width: `${r.avg}%` }} /></div>
+                              <span className="text-sm">{r.avg}%</span>
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>{r.follow > 0 ? <span className="badge badge-danger">{r.follow}</span> : <span className="text-secondary text-sm">—</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            {/* 要フォロー（滞留者） */}
+            <div className="card">
+              <div className="card-header">⚠️ 要フォロー（進捗が低い順）</div>
+              <div style={{ padding: 0 }}>
+                <div className="table-container">
+                  <table>
+                    <thead><tr><th>研修者</th><th>所属</th><th>進捗</th></tr></thead>
+                    <tbody>
+                      {laggards.map(s => (
+                        <tr key={s.user.id}>
+                          <td><Link href={`/learners/${s.user.id}`} style={{ fontWeight: 600 }}>{s.user.name}</Link></td>
+                          <td className="text-sm text-secondary">{s.organization.name}</td>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                              <div className="progress-bar" style={{ width: '70px' }}><div className={`progress-bar-fill ${s.overallProgress === 100 ? 'completed' : ''}`} style={{ width: `${s.overallProgress}%` }} /></div>
+                              <span className="text-sm">{s.overallProgress}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 承認待ちの認定一覧 */}
       {pendingCerts.length > 0 && (

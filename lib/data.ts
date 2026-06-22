@@ -234,10 +234,67 @@ export async function getLearnerSummary(userId: string): Promise<LearnerSummary 
   };
 }
 
+/**
+ * 研修者サマリー一覧を一括取得する（N+1回避・販売物レベルの速度）。
+ * 学習者ごとに個別クエリを投げず、必要なテーブルをまとめて取得しメモリ上で集計する。
+ */
 export async function getLearnerSummaries(currentUser: User): Promise<LearnerSummary[]> {
   const learners = await getLearnersForRole(currentUser);
-  const summaries = await Promise.all(learners.map(l => getLearnerSummary(l.id)));
-  return summaries.filter((s): s is LearnerSummary => s !== undefined);
+  if (learners.length === 0) return [];
+
+  const learnerIds = learners.map(l => l.id);
+  const orgIds = [...new Set(learners.map(l => l.organizationId))];
+
+  const [orgsRes, curRes, subRes, progRes, evalRes] = await Promise.all([
+    sb().from('organizations').select('*').in('id', orgIds),
+    sb().from('curricula').select('id, type, track_code'),
+    sb().from('subjects').select('id, curriculum_id'),
+    sb().from('course_progresses').select('user_id, subject_id, status').in('user_id', learnerIds),
+    sb().from('evaluations').select('learner_id, evaluated_at').in('learner_id', learnerIds),
+  ]);
+
+  const orgMap = new Map((orgsRes.data || []).map(o => [o.id, mapOrganization(o)]));
+  const curRows = curRes.data || [];
+  const subRows = subRes.data || [];
+
+  // 学習者別の進捗をまとめる
+  const progByUser = new Map<string, { subject_id: string; status: string }[]>();
+  for (const pr of progRes.data || []) {
+    const arr = progByUser.get(pr.user_id) || [];
+    arr.push(pr);
+    progByUser.set(pr.user_id, arr);
+  }
+  // 学習者別の最新評価日
+  const lastEvalByUser = new Map<string, string>();
+  for (const e of evalRes.data || []) {
+    if (!e.evaluated_at) continue;
+    const cur = lastEvalByUser.get(e.learner_id);
+    if (!cur || e.evaluated_at > cur) lastEvalByUser.set(e.learner_id, e.evaluated_at);
+  }
+
+  return learners.map(l => {
+    const relevantCurIds = new Set(curRows.filter(c => isRelevantCurriculum(c, l.tracks)).map(c => c.id));
+    const relevantSubjectIds = new Set(
+      subRows.filter(su => relevantCurIds.has(su.curriculum_id)).map(su => su.id),
+    );
+    const total = relevantSubjectIds.size;
+    const myProg = progByUser.get(l.id) || [];
+    const completed = myProg.filter(
+      pr => pr.status === 'completed' && relevantSubjectIds.has(pr.subject_id),
+    ).length;
+    const overallProgress = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const organization = orgMap.get(l.organizationId) || {
+      id: l.organizationId, name: '—', type: 'store' as const,
+      parentId: null, createdAt: '', updatedAt: '',
+    };
+    return {
+      user: l,
+      organization,
+      overallProgress,
+      lastEvaluationDate: lastEvalByUser.get(l.id) || null,
+      currentLevelName: LEVEL_LABELS[l.currentLevel],
+    };
+  });
 }
 
 // ============================================
