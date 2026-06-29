@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { useRouteId } from '@/lib/route-id';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { getLearnerDetail, updateProgressStatus, updateProgressMemo, updateProgressDates, updateSubjectHours, bulkUpdateProgressStatus } from '@/lib/data';
+import { getLearnerDetail, updateProgressStatus, updateProgressMemo, updateProgressDates, updateSubjectHours, bulkUpdateProgressStatus, getHandoffLogs, addHandoffLog, deleteHandoffLog } from '@/lib/data';
 import {
   ROLE_LABELS, LEVEL_BADGE_CLASS,
   PROGRESS_STATUS_LABELS, PROGRESS_STATUS_BADGE_CLASS,
@@ -18,9 +18,9 @@ import {
   SECTION_LABELS, SECTION_ICONS, SECTION_MAX_SCORES,
   OSCE_TOTAL_SCORE, EVALUATION_TEMPLATES,
 } from '@/lib/constants';
-import type { EvaluationSectionCode, ProgressStatus, LearnerDetail, CurriculumProgress } from '@/lib/types';
+import type { EvaluationSectionCode, ProgressStatus, LearnerDetail, CurriculumProgress, HandoffLog } from '@/lib/types';
 
-type TabKey = 'progress' | 'evaluations' | 'certifications';
+type TabKey = 'progress' | 'evaluations' | 'certifications' | 'handoff';
 const CAN_EDIT_PROGRESS_ROLES = ['admin', 'education_manager', 'evaluator', 'store_manager'];
 
 export default function LearnerDetailClient() {
@@ -32,13 +32,22 @@ export default function LearnerDetailClient() {
   const [editingMemos, setEditingMemos] = useState<Record<string, string>>({});
   const [detail, setDetail] = useState<LearnerDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  // 引継ぎログ
+  const [handoffLogs, setHandoffLogs] = useState<HandoffLog[]>([]);
+  const [hDate, setHDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [hHandler, setHHandler] = useState('');
+  const [hCompleted, setHCompleted] = useState('');
+  const [hNext, setHNext] = useState('');
+  const [hSubmitting, setHSubmitting] = useState(false);
 
   useEffect(() => {
     getLearnerDetail(id).then(d => { setDetail(d || null); setLoading(false); });
+    getHandoffLogs(id).then(setHandoffLogs);
   }, [id]);
 
   // データ再取得ヘルパー
   const refresh = () => getLearnerDetail(id).then(d => setDetail(d || null));
+  const refreshHandoff = () => getHandoffLogs(id).then(setHandoffLogs);
 
   if (!currentUser) return null;
   if (currentUser.role === 'learner' && currentUser.id !== id) {
@@ -72,6 +81,27 @@ export default function LearnerDetailClient() {
       else next.add(subjectId);
       return next;
     });
+  };
+
+  const handleAddHandoff = async () => {
+    if (!hHandler.trim() || (!hCompleted.trim() && !hNext.trim())) return;
+    setHSubmitting(true);
+    try {
+      await addHandoffLog(
+        { learnerId: learner.id, logDate: hDate, handler: hHandler.trim(), completedItems: hCompleted.trim(), nextItems: hNext.trim() },
+        currentUser.id,
+      );
+      setHHandler(''); setHCompleted(''); setHNext('');
+      await refreshHandoff();
+    } finally {
+      setHSubmitting(false);
+    }
+  };
+
+  const handleDeleteHandoff = async (logId: string) => {
+    if (!confirm('この引継ぎログを削除しますか？')) return;
+    await deleteHandoffLog(logId);
+    await refreshHandoff();
   };
 
   const handleStatusChange = async (subjectId: string, newStatus: ProgressStatus) => {
@@ -159,6 +189,7 @@ export default function LearnerDetailClient() {
         <button className={`tab ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>📚 受講進捗</button>
         <button className={`tab ${activeTab === 'evaluations' ? 'active' : ''}`} onClick={() => setActiveTab('evaluations')}>📝 OSCE評価 ({evaluations.length})</button>
         <button className={`tab ${activeTab === 'certifications' ? 'active' : ''}`} onClick={() => setActiveTab('certifications')}>🏆 認定 ({certifications.length})</button>
+        <button className={`tab ${activeTab === 'handoff' ? 'active' : ''}`} onClick={() => setActiveTab('handoff')}>🤝 引継ぎログ ({handoffLogs.length})</button>
       </div>
 
       {/* 進捗タブ */}
@@ -365,6 +396,81 @@ export default function LearnerDetailClient() {
           )}
         </div>
       )}
+      {/* 引継ぎログタブ */}
+      {activeTab === 'handoff' && (
+        <div>
+          {canEditProgress && (
+            <div className="card" style={{ marginBottom: 'var(--space-md)' }}>
+              <div className="card-header">➕ 引継ぎを追記</div>
+              <div className="card-body">
+                <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
+                  <div>
+                    <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>日付</label>
+                    <input type="date" className="form-input" value={hDate} onChange={e => setHDate(e.target.value)} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>担当者</label>
+                    <input type="text" className="form-input" placeholder="例: 井上、糸数、河口・中谷" value={hHandler} onChange={e => setHHandler(e.target.value)} style={{ width: '100%' }} />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-sm)' }}>
+                  <div>
+                    <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>完了項目</label>
+                    <textarea className="form-input" rows={4} placeholder="今回完了した内容（例: ストレッチ完了 / リリース【大臀筋・中臀筋】まで）" value={hCompleted} onChange={e => setHCompleted(e.target.value)} style={{ width: '100%', resize: 'vertical' }} />
+                  </div>
+                  <div>
+                    <label className="text-sm text-secondary" style={{ display: 'block', marginBottom: '4px' }}>次回項目</label>
+                    <textarea className="form-input" rows={4} placeholder="次回お願いしたいこと（例: リリース【深層外旋六筋】から）" value={hNext} onChange={e => setHNext(e.target.value)} style={{ width: '100%', resize: 'vertical' }} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-sm)' }}>
+                  <button className="btn btn-primary" disabled={hSubmitting || !hHandler.trim() || (!hCompleted.trim() && !hNext.trim())} onClick={handleAddHandoff}>
+                    {hSubmitting ? '保存中...' : '💾 追記する'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="card">
+            <div className="card-header">🤝 引継ぎログ（新しい順）</div>
+            <div style={{ padding: 0 }}>
+              <div className="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '110px' }}>日付</th>
+                      <th style={{ width: '120px' }}>担当者</th>
+                      <th>完了項目</th>
+                      <th>次回項目</th>
+                      {canEditProgress && <th style={{ width: '44px' }}></th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {handoffLogs.map(log => (
+                      <tr key={log.id}>
+                        <td className="text-sm text-secondary" style={{ whiteSpace: 'nowrap' }}>{new Date(log.logDate).toLocaleDateString('ja-JP')}</td>
+                        <td className="text-sm" style={{ fontWeight: 600 }}>{log.handler}</td>
+                        <td className="text-sm" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{log.completedItems || '—'}</td>
+                        <td className="text-sm" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{log.nextItems || '—'}</td>
+                        {canEditProgress && (
+                          <td style={{ textAlign: 'center' }}>
+                            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} onClick={() => handleDeleteHandoff(log.id)} title="削除">🗑</button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                    {handoffLogs.length === 0 && (
+                      <tr><td colSpan={canEditProgress ? 5 : 4}><div className="empty-state" style={{ padding: 'var(--space-lg)' }}><div className="empty-state-icon">🤝</div><p>まだ引継ぎログはありません</p>{canEditProgress && <p className="text-sm text-secondary">上のフォームから日付・担当者・完了項目・次回項目を追記してください。</p>}</div></td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {currentUser.role !== 'learner' && (
         <div style={{ marginTop: 'var(--space-lg)', display: 'flex', justifyContent: 'center' }}>
           <Link href="/learners" className="btn btn-outline">← 研修者一覧に戻る</Link>

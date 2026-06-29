@@ -15,7 +15,7 @@ import type {
   CertificationWithDetails, CertificationLevel, Evaluation,
   EvaluationItem, EvaluationItemName, TrackCode,
   ProgressStatus, CourseProgress, Curriculum, Subject,
-  CertificationLevelCode,
+  CertificationLevelCode, HandoffLog,
 } from './types';
 import { LEVEL_LABELS, OSCE_TOTAL_SCORE } from './constants';
 
@@ -875,5 +875,59 @@ export async function linkAuthUid(userId: string, authUid: string): Promise<bool
   const { error } = await sb().from('users')
     .update({ auth_uid: authUid })
     .eq('id', userId);
+  return !error;
+}
+
+
+// ============================================
+// 引継ぎログ（学習者ごとの日報形式の引継ぎ）
+// ============================================
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function mapHandoffLog(row: any): HandoffLog {
+  return {
+    id: row.id,
+    learnerId: row.learner_id,
+    logDate: row.log_date,
+    handler: row.handler,
+    completedItems: row.completed_items ?? null,
+    nextItems: row.next_items ?? null,
+    createdBy: row.created_by ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/** 学習者の引継ぎログを新しい順に取得 */
+export async function getHandoffLogs(learnerId: string): Promise<HandoffLog[]> {
+  const { data } = await sb()
+    .from('handoff_logs').select('*')
+    .eq('learner_id', learnerId)
+    .order('log_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  return (data || []).map(mapHandoffLog);
+}
+
+/** 引継ぎログを1件追加 */
+export async function addHandoffLog(
+  input: { learnerId: string; logDate: string; handler: string; completedItems: string; nextItems: string },
+  createdById: string,
+): Promise<HandoffLog> {
+  const { data, error } = await sb().from('handoff_logs').insert({
+    learner_id: input.learnerId,
+    log_date: input.logDate,
+    handler: input.handler,
+    completed_items: input.completedItems || null,
+    next_items: input.nextItems || null,
+    created_by: createdById,
+  }).select().single();
+  if (error || !data) throw new Error('引継ぎログの保存に失敗しました');
+  return mapHandoffLog(data);
+}
+
+/** 引継ぎログを削除 */
+export async function deleteHandoffLog(id: string): Promise<boolean> {
+  const { error } = await sb().from('handoff_logs').delete().eq('id', id);
   return !error;
 }

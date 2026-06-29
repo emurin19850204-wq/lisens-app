@@ -313,6 +313,28 @@ export interface CertificationWithDetails {
 }
 
 // ============================================
+// 引継ぎログ 関連
+// ============================================
+
+/** 引継ぎログ（学習者ごとの日報形式の引継ぎ：日付・担当者・完了項目・次回項目） */
+export interface HandoffLog {
+  id: string;
+  learnerId: string;
+  /** 日付（YYYY-MM-DD） */
+  logDate: string;
+  /** 担当者（記入時の自由入力。例: 井上、糸数、河口・中谷） */
+  handler: string;
+  /** 完了項目 */
+  completedItems: string | null;
+  /** 次回項目 */
+  nextItems: string | null;
+  /** 記録した操作ユーザーID */
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================
 // 認証関連
 // ============================================
 
